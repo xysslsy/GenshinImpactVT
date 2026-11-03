@@ -1,0 +1,9 @@
+.venv/
+.deps/
+*.nupkg
+__pycache__/
+*.pyc
+.build/
+.test-*/
+*.sqlite3
+*.lnk
