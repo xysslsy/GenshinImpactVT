@@ -6,7 +6,7 @@ GenshinImpactVT 是一个用来看攻略视频的 Windows 小窗口。你可以�
 
 ## 怎样打开
 
-1. 找到 `GenshinImpactVT-便携版.zip`，右键选择“全部解压缩”。
+1. 找到 `GenshinImpactVT-windows-x64.zip`，右键选择“全部解压缩”。
 2. 打开解压出来的 `GenshinImpactVT` 文件夹，双击 **GenshinImpactVT.exe**。
 3. Windows 询问是否允许以管理员身份运行时，选择“是”。这是为了让软件与同样以管理员身份运行的游戏配合使用。
 4. 在顶部地址栏粘贴哔哩哔哩视频链接，按回车打开。
@@ -35,9 +35,9 @@ GenshinImpactVT 是一个用来看攻略视频的 Windows 小窗口。你可以�
 
 程序图标来自你提供的图片。若 Windows 仍显示旧快捷方式图标，可以删除旧快捷方式，再对新 exe 右键创建快捷方式。
 
-## ?????????
+## 从源码运行
 
-?? Windows x64?Python 3.12 x64?.NET Framework 4.8 ? WebView2 Evergreen Runtime?????????
+需要 Windows x64、Python 3.12 x64、.NET Framework 4.8 和 WebView2 Evergreen Runtime。在仓库目录执行：
 
 ```powershell
 py -3.12 -m venv .venv
@@ -46,10 +46,10 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe main.py
 ```
 
-SDK ????? NuGet ????? Microsoft WebView2 SDK ??? SHA-256?`launch.vbs` ??? Windows UAC ??????????????????????????
+SDK 安装脚本从 NuGet 官方源下载 Microsoft WebView2 SDK 并核对 SHA-256。`launch.vbs` 会通过 Windows UAC 请求管理员权限。
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
 ```
 
-?????[MaBao ????](https://gitee.com/LanRenZhiNeng/mabao)???????????????????????????
+参考项目：[MaBao 官方仓库](https://gitee.com/LanRenZhiNeng/mabao)。本项目独立开发，不包含其闭源实现、模型或账号服务。
