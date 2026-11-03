@@ -4,16 +4,18 @@ GenshinImpactVT 是一个用来看攻略视频的 Windows 小窗口。你可以�
 
 本项目为独立开发的非官方工具，与《原神》及其运营方没有官方关联。
 
-## 怎样打开
+## 下载与安装
 
-1. 找到 `GenshinImpactVT-windows-x64.zip`，右键选择“全部解压缩”。
-2. 打开解压出来的 `GenshinImpactVT` 文件夹，双击 **GenshinImpactVT.exe**。
-3. Windows 询问是否允许以管理员身份运行时，选择“是”。这是为了让软件与同样以管理员身份运行的游戏配合使用。
-4. 在顶部地址栏粘贴哔哩哔哩视频链接，按回车打开。
+适用于 **Windows 10 / 11 64 位**。这是免安装版本，不需要安装 Python。
 
-请先解压整个文件夹，不要直接在压缩包里双击运行，也不要把 exe 单独移走：它需要旁边的 `_internal` 文件夹。这个包已经包含 Python 和程序依赖，不需要另外安装 Python。
+1. 打开 [下载页面（v0.1.0 预发布版）](https://github.com/xysslsy/GenshinImpactVT/releases/tag/v0.1.0)，在页面的 **Assets** 下点击 `GenshinImpactVT-windows-x64.zip`。也可以[直接下载压缩包](https://github.com/xysslsy/GenshinImpactVT/releases/download/v0.1.0/GenshinImpactVT-windows-x64.zip)。
+2. 下载完成后，右键压缩包，选择 **全部解压缩**，并选择一个容易找到的文件夹。
+3. 打开解压得到的 `GenshinImpactVT` 文件夹，双击 **GenshinImpactVT.exe**。如果 Windows 弹出管理员权限确认，选择 **是**；这有助于快捷键在同样以管理员权限运行的游戏中工作。
+4. 在软件顶部地址栏粘贴哔哩哔哩视频链接，按回车即可观看。
 
-第一次运行需要 Windows 10/11 64 位、Microsoft Edge WebView2 Evergreen Runtime 和 .NET Framework 4.8。大多数 Windows 电脑已有这些组件；如果界面提示缺少 WebView2，可从微软官网下载并安装：https://developer.microsoft.com/microsoft-edge/webview2/
+请保留程序旁边的 `_internal` 文件夹，不要直接在压缩包里运行，也不要单独移动 exe。需要桌面快捷方式时，可以右键 exe，选择 **发送到 → 桌面快捷方式**。
+
+软件还需要 Microsoft Edge WebView2 Evergreen Runtime 和 .NET Framework 4.8。如果提示缺少 WebView2，请到 [微软官网](https://developer.microsoft.com/microsoft-edge/webview2/)下载安装 Evergreen Runtime；缺少 .NET Framework 时，请从 [微软官网](https://dotnet.microsoft.com/download/dotnet-framework/net48)下载安装。
 
 ## 游戏时怎么用
 
