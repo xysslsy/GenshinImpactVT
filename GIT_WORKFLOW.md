@@ -1,6 +1,6 @@
 # 产品仓库与提交
 
-当前文件夹就是独立产品源码仓库，本机路径为 `D:\AINixiang\GenshinImpactVT`，远端为 `https://github.com/xysslsy/GenshinImpactVT.git`。日常分支为 `main`，`release/v1` 和 `v1` 标签保留发布时快照。
+当前文件夹就是独立产品源码仓库，本机路径为 `D:\AINixiang\GenshinImpactVT`，远端为 `https://github.com/xysslsy/GenshinImpactVT.git`。日常分支为 `main`；`release/v1` 与 `v1` 标签保留原发布快照，新功能在独立分支开发后合并，`v1.1` 标记透明字幕版。
 
 平级 `mabao/` 仍是原 Gitee 参考仓库；其 remote、原始提交、规划和实验源文件保留。产品源码已从原 `mabao/next/` 搬出，日常在当前文件夹执行 Git 命令。
 
@@ -13,6 +13,6 @@
 5. 字幕设置、宿主适配、底部实时字幕及集成验证。
 6. v1 版本元数据、构建、发行记录和说明。
 
-提交保留真实时间，不变基已有公开历史；公开的 `v0.1.0` 不改写。历史二进制版本编号见 [RELEASES.md](RELEASES.md)。六个模块提交、v1 标签和发行包已上传；历史安装包按服务端 SHA-256 核对完成后，本地仅保留 v1、v0.4。
+提交保留真实时间，不变基已有公开历史；公开的 `v0.1.0`、`v1` 不改写。历史二进制版本编号见 [RELEASES.md](RELEASES.md)。六个原模块提交、v1 标签和发行包已上传；后续分别记录目录迁移及 v1.1 的透明字幕、小窗与发行说明。历史安装包按服务端 SHA-256 核对后清理，v0.4 的删除被策略拦截，暂保留。
 
-`.build/`、`.maintenance/`、`.venv/`、依赖、临时浏览器资料、数据库、用户快捷方式和 ZIP/EXE 不进 Git。发行文件位于本文件夹内的 `releases/`，仅保留 v1、v0.4。旧测试临时资料已清理，开发依赖在 `.venv/` 中按 `requirements.txt` 重建；本机 `.build/` 临时构建缓存仍保留，与正式发行目录分开。
+`.build/`、`.maintenance/`、`.venv/`、依赖、临时浏览器资料、数据库、用户快捷方式和 ZIP/EXE 不进 Git。发行文件位于本文件夹内的 `releases/`，当前 v1.1、上一版 v1；v0.4 待清理。旧测试临时资料已清理，开发依赖在 `.venv/` 中按依赖文件重建；本机 `.build/` 临时构建缓存删除被自动审批策略拦截，仍保留，与正式发行目录分开。

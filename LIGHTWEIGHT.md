@@ -18,7 +18,7 @@
 
 - 轻量包通过 `packaging/GenshinImpactVT-light.spec` 明确排除 RapidOCR、ONNX Runtime、NumPy、OpenCV、Pillow、OCR 模型等；基础依赖仍是 `requirements.txt`。
 - 关闭字幕功能不执行页面定时脚本，不订阅字幕网络响应。开启后仅在等候响应/下载期间运行额外的网络轮询；完成后网络定时器和下载线程退出。
-- 播放中查询时间间隔 300 ms，暂停时 700 ms；已载入平台字幕时避免截图和样式/布局读取。字幕内存缓存随页面或分 P 更换清理，不写入磁盘。
+- 播放中查询时间间隔 300 ms，暂停时 700 ms；已载入平台字幕时避免截图。字幕内存缓存随页面或分 P 更换清理，不写入磁盘。v1.1 的透明字幕在文字、视频尺寸、滚动或全屏事件变化时读取视频矩形，不增加持续采样或动画。
 - 浏览器完整网页及视频解码仍会消耗 CPU/GPU/内存。不能以“没有 AI 模型”等同于软件总占用很小；性能记录应分别统计主进程、WebView2 进程树、播放状态和采样条件。
 
 ## 构建与验证
@@ -30,3 +30,11 @@ python -B tests/bilibili_native_smoke.py
 ```
 
 最后一个测试明确使用软件现有浏览器会话访问提供的视频，应用配置和测试结果在 `.test-bilibili-light/` 隔离；不导出 Cookie、账号标识或完整字幕。已登录字幕可用性与匿名测试应分别报告。
+
+## 视频内字幕层
+
+`subtitle_overlay.py` 使用 [WebView2 ExecuteScriptAsync](https://learn.microsoft.com/microsoft-edge/webview2/how-to/javascript) 在当前视频矩形内放置透明、鼠标穿透的文字层。Shadow DOM 隔离网页样式，字幕通过 `textContent` 写入；容器全屏时移入全屏容器。原生 `<video>` 全屏使用单独的文本轨道并转义文字，读取器排除这条显示轨，避免重复识别。
+
+尺寸变化由 ResizeObserver、窗口 resize/scroll 和 fullscreenchange 事件触发，没有常驻重绘循环；空字幕移除显示节点、取消待绘制帧并断开视频尺寸观察。仅支持当前顶层文档中的视频，未实现跨域 iframe 内的叠层；当前 B站完整页与官方纯播放器均在该范围内。
+
+`tests/subtitle_overlay_smoke.py` 使用本地视频和隔离 profile 验证透明渲染、纯文本、布局跟随、小窗、两种全屏、隐藏和清空。全屏测试使用 WebView2 的 [CallDevToolsProtocolMethodAsync](https://learn.microsoft.com/dotnet/api/microsoft.web.webview2.core.corewebview2.calldevtoolsprotocolmethodasync) 给本地页面测试调用提供手势；产品不开放调试端口，也不用该调用处理字幕。

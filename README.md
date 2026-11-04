@@ -1,18 +1,18 @@
 # GenshinImpactVT
 
-当前版本 **v1**（内部版本 1.0.0）。Windows 桌面攻略视频工作台，使用 Python 3.12、PySide6、pythonnet、Microsoft WebView2 WinForms 和 WebView2 Evergreen Runtime，不依赖原版 MaBao。
+当前版本 **v1.1**（内部版本 1.1.0）。Windows 桌面攻略视频工作台，使用 Python 3.12、PySide6、pythonnet、Microsoft WebView2 WinForms 和 WebView2 Evergreen Runtime，不依赖原版 MaBao。
 
-支持 B站 AI/CC 字幕、浏览器底部实时字幕、八向方向氛围光、官方纯播放器、视频快捷控制和本地收藏/历史。查看 [版本记录](CHANGELOG.md)、[本地发行目录](RELEASES.md) 和 [Git 仓库说明](GIT_WORKFLOW.md)。
+支持 B站 AI/CC 字幕、视频内透明字幕、左下角小窗观看、八向方向氛围光、官方纯播放器、视频快捷控制和本地收藏/历史。查看 [版本记录](CHANGELOG.md)、[本地发行目录](RELEASES.md) 和 [Git 仓库说明](GIT_WORKFLOW.md)。
 
 ## 下载与本机位置
 
-普通用户可从 [v1 发布页](https://github.com/xysslsy/GenshinImpactVT/releases/tag/v1) 下载并全部解压，双击 `GenshinImpactVT.exe`；也可[直接下载 v1 ZIP](https://github.com/xysslsy/GenshinImpactVT/releases/download/v1/GenshinImpactVT-v1-windows-x64.zip)。
+普通用户可从 [v1.1 发布页](https://github.com/xysslsy/GenshinImpactVT/releases/tag/v1.1) 下载并全部解压，双击 `GenshinImpactVT.exe`；也可[直接下载 v1.1 ZIP](https://github.com/xysslsy/GenshinImpactVT/releases/download/v1.1/GenshinImpactVT-v1.1-windows-x64.zip)。
 
 本机软件文件已集中在 `D:\AINixiang\GenshinImpactVT`：
 
-- 当前版本：`releases\v1\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v1**。
-- 上一版本：`releases\v0.4\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v0.4**。
-- ZIP、校验清单和位置说明位于 `releases\`。本地仅保留这两版，旧版已通过 SHA-256 核对后备份至 [GitHub 历史归档](https://github.com/xysslsy/GenshinImpactVT/releases/tag/binary-archive-20261104)。
+- 当前版本：`releases\v1.1\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v1.1**。
+- 上一版本：`releases\v1\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v1**。
+- ZIP、校验清单和位置说明位于 `releases\`。日常使用上面两版，更早版本已通过 SHA-256 核对后备份至 [GitHub 历史归档](https://github.com/xysslsy/GenshinImpactVT/releases/tag/binary-archive-20261104)。v0.0～v0.3 本地包已清理；v0.4 目录和旧 `.build` 缓存的删除被自动审批策略拦截，暂保留。
 - 当前文件夹即产品 Git 仓库；源码启动使用下方说明中的 `.venv`。原 Gitee 参考仓库与研究资料仍独立保留。
 
 ## 环境和启动
@@ -34,7 +34,7 @@ py -3.12 -m venv .venv
 
 SDK 脚本从官方 NuGet 下载固定版本并验证 SHA-256；安装过程需要网络。首次启动打开自带的本地合成视频页面，可输入 HTTP(S) 地址浏览。Evergreen Runtime 或 SDK 缺失时，浏览器底部状态栏显示原因。
 
-需要重新打包轻量版时，先安装 `requirements-dev.txt`，再运行 `python -m PyInstaller --noconfirm --distpath .build/dist --workpath .build/work packaging/GenshinImpactVT-light.spec`。`.build` 是可重建的临时目录，正式保留包仍位于 `releases/v1` 和 `releases/v0.4`。
+需要重新打包轻量版时，先安装 `requirements-dev.txt`，再运行 `python -m PyInstaller --noconfirm --distpath .build/dist --workpath .build/work packaging/GenshinImpactVT-light.spec`。`.build` 是可重建的临时目录，正式保留包位于 `releases/v1.1` 和 `releases/v1`。
 
 收藏和历史保存在 `%LOCALAPPDATA%\MaBaoNext\library.sqlite3`；应用设置在同目录 `settings.ini`，浏览器数据在 `browser-profile`。历史包含访问过的完整 URL；浏览器数据与收藏、历史分开保存。点击侧栏可浏览收藏和历史，双击打开、选择后删除。悬浮控制可前进、后退、刷新、设置置顶和恢复主窗口。正常退出后恢复窗口配置及上次网页。
 
@@ -56,7 +56,7 @@ GUI 测试需要交互式桌面，会打开窗口并模拟按键；仅使用临�
 2. 点击左侧 **字幕识别**，开启功能，保持 **轻量：B站平台字幕 + 网页字幕**。点击 **刷新字幕（登录后点击）**，正常刷新视频后自动检测平台提供的字幕。
 3. 状态显示“已载入 N 条字幕，无本地推理”后，按视频时间读取字幕，并高亮方向。网页当前已显示的字幕也可以直接读取；无需开启 OCR。支持正常快进、回退和多分 P 字幕切换。
 4. 点击 **显示方向浮窗**，拖动调整位置；高亮颜色在“设置”页修改。**最近识别文字** 用于检查当前字幕。
-   当前字幕同时实时显示在浏览器底部，精简模式也可保留；可在字幕页关闭 **在浏览器底部显示当前字幕**。关闭识别、切换视频/分 P 和定位时清掉旧句子；暂停时保留当前时间点字幕。
+   当前字幕直接显示在视频画面底部，透明背景、白字描边，不另占面板，也不挡鼠标操作；可在字幕页关闭 **在视频内显示透明字幕**。关闭识别、切换视频/分 P 和定位时清掉旧句子；暂停时保留当前时间点字幕。若网页自身的字幕同时显示造成重叠，可关闭播放器自己的字幕显示。
 5. 游戏时可点击 **打开官方纯播放器**，使用 B站官方外链播放页，减少完整网页的侧栏和推荐内容；需要完整功能时点击 **返回完整 B站网页**。纯播放器已适配 7/8 切分 P，仍受平台自身画质、访问与播放限制。
 
 方向浮窗默认带圆形柔光：例如“东北”在右上区域显示一团蓝色光晕，“西南”在左下显示，支持八个方向。背景透明，没有圆形边框。短暂淡入后保持，再淡出；新方向立即换位置，快进/空字幕等清理动作立即取消旧光效。可在“设置”中关闭 **方向氛围光**，或调整颜色、强度、浮窗大小。拖动浮窗仍可调整位置。
@@ -67,7 +67,7 @@ GUI 测试需要交互式桌面，会打开窗口并模拟按键；仅使用临�
 
 这条路线只复用 B站已提供且当前会话有权访问的字幕。它不能强制平台为每一个没有字幕的视频生成字幕；未登录、没有字幕、网络失败分别提示，不会自动启动本地语音识别。字幕响应和时间轴仅保存在内存，不导出账号信息，不向其他服务上传音频。
 
-字幕文件按分 P 加载一次，之后只进行时间查找。载入平台字幕后不截图、不读取页面样式布局；播放时每 300 ms 查询，暂停时每 700 ms 查询，关闭功能停止轮询。轻量便携包不包含 OCR/语音模型，运行环境仍需要 WebView2，因此完整 B站网页、视频解码和浏览器本身仍有开销。
+字幕文件按分 P 加载一次，之后只进行时间查找。载入平台字幕后不截图；播放时每 300 ms 查询时间，暂停时每 700 ms 查询。透明字幕仅在文字变化或视频缩放/滚动/全屏事件时更新布局，没有新增定时采样。关闭识别停止时间轮询。轻量便携包不包含 OCR/语音模型，运行环境仍需要 WebView2，因此完整 B站网页、视频解码和浏览器本身仍有开销。
 
 ## 可选的画面 OCR
 
@@ -85,7 +85,7 @@ GUI 测试需要交互式桌面，会打开窗口并模拟按键；仅使用临�
 
 双击 `GenshinImpactVT.lnk` 无控制台启动；也可以双击 `launch.vbs`。这些入口每次通过 Windows UAC 请求管理员权限，确认后以 pythonw 启动；取消时不会启动。命令行直接执行 `main.py` 沿用当前终端权限。启动异常会显示错误窗口。
 
-键盘视频快捷键只有 `7` 上一集和 `8` 下一集。侧键负责播放/暂停与快退。默认的普通监听不会拦截 7、8，当前游戏或其他程序也会收到原按键；在其他程序输入 7 或 8 时也可能切换视频，可在设置页关闭此功能。精简窗口隐藏应用导航、地址和底部栏；使用自动出现的悬浮控制中的“显示 / 隐藏工具栏”恢复。网页自己的控件和普通窗口标题栏可能仍然存在。网页报告 HTML 全屏时会尝试同步精简状态，部分网站的网页内全屏不一定发出该事件。
+键盘视频快捷键只有 `7` 上一集和 `8` 下一集。侧键负责播放/暂停与快退。默认的普通监听不会拦截 7、8，当前游戏或其他程序也会收到原按键；在其他程序输入 7 或 8 时也可能切换视频，可在设置页关闭此功能。点击浏览器底部 **小窗观看**：切换为 480×300 的左下角窗口，隐藏应用导航、地址和底部栏，可继续缩小到 320×180。使用自动出现的悬浮控制中的 **显示 / 隐藏工具栏** 恢复。透明字幕继续显示；退出后记住精简状态和窗口位置。网页自己的控件和普通窗口标题栏可能仍然存在。HTML 全屏自动隐藏工具栏，退出后恢复此前的精简状态；部分网站的网页内全屏不一定发出该事件。
 
 设置页可将 `7` / `8` 由普通监听切换为“系统全局热键”：Windows 会将两键注册为全局快捷键，可能使其他程序无法正常输入 7、8，适合需要时临时尝试；切回普通监听、关闭开关或退出软件会释放按键。注册失败时设置页显示提示。该方式不保证在游戏前台可用，也不影响鼠标侧键监听。
 
