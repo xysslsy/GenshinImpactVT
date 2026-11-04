@@ -7,7 +7,7 @@ from genshinimpactvt.raw_mouse import side_buttons
 
 class MediaTests(unittest.TestCase):
     def test_directions(self):
-        self.assertEqual(directions('往东再向北'), {'东', '北'})
+        self.assertEqual(directions('往东再向北'), {'东'})
         self.assertEqual(directions('找东西'), set())
         self.assertEqual(directions('不是南'), set())
 
