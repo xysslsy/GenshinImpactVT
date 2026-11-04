@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
 from genshinimpactvt.browser import BrowserHost, DATA, user32
 from genshinimpactvt.storage import Store
 from genshinimpactvt.urls import normalize_url
-from genshinimpactvt.subtitle_strip import SubtitleStrip
+from genshinimpactvt.subtitle_overlay import SubtitleOverlay
 from genshinimpactvt.version import APP_NAME,APP_TITLE,__version__,DISPLAY_VERSION
 
 user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
@@ -69,7 +69,7 @@ class Main(QMainWindow):
         super().__init__(); self.data_dir = Path(data_dir); self.data_dir.mkdir(parents=True, exist_ok=True)
         self.settings = QSettings(str(self.data_dir / 'settings.ini'), QSettings.Format.IniFormat)
         self.store = Store(self.data_dir / 'library.sqlite3'); self.current_url = ''
-        self.setWindowTitle(APP_TITLE); self.resize(1200, 760); self.setMinimumSize(760, 500)
+        self.setWindowTitle(APP_TITLE); self.resize(960, 620); self.setMinimumSize(480, 300)
         self.browser = BrowserHost(); self.browser.ready.connect(lambda: self.status.setText('浏览器已就绪'))
         self.browser.failed.connect(self.error); self.browser.navigated.connect(self.navigated)
         self.browser.source_changed.connect(self.address_changed); self.browser.loading.connect(lambda: self.status.setText('正在加载…'))
@@ -100,7 +100,7 @@ class Main(QMainWindow):
         bottom = QHBoxLayout(); self.status = QLabel('正在启动浏览器…'); self.status.setObjectName('muted'); bottom.addWidget(self.status, 1)
         self.pin = QCheckBox('窗口置顶'); self.pin.toggled.connect(self.set_topmost); bottom.addWidget(self.pin)
         bottom.addWidget(button('悬浮控制', self.toggle_floating)); layout.addLayout(bottom)
-        self.subtitle_strip=SubtitleStrip();layout.addWidget(self.subtitle_strip)
+        self.subtitle_overlay = SubtitleOverlay(self.browser, self)
         return page
 
     def make_list(self, kind):

@@ -73,7 +73,7 @@ class SubtitlePage(QWidget):
         note = QLabel('优先读取 B站已提供的 AI/CC 字幕，按视频时间提醒方向。轻量模式不录音、不运行本地模型。')
         note.setWordWrap(True); box.addWidget(note)
         self.enabled = QCheckBox('启用字幕识别与方向提醒'); self.enabled.setChecked(enabled); box.addWidget(self.enabled)
-        self.show_footer=QCheckBox('在浏览器底部显示当前字幕');self.show_footer.setChecked(True);box.addWidget(self.show_footer)
+        self.show_footer=QCheckBox('在视频内显示透明字幕');self.show_footer.setChecked(True);box.addWidget(self.show_footer)
         self.mode = QComboBox()
         modes = [('轻量：B站平台字幕 + 网页字幕', 'auto'), ('仅使用网页当前显示的字幕', 'dom')]
         if ocr_available: modes.append(('高级：手动开启画面字幕 OCR', 'ocr'))

@@ -6,6 +6,14 @@ No cookies/account identifiers/caption URLs or full subtitles are exported.
 import ctypes,json,sys,time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
+OVERLAY_PROBE = """(() => {
+ const h=document.getElementById('genshinimpactvt-caption-overlay'),v=document.querySelector('video');
+ if(!h||!v)return false;
+ const r=v.getBoundingClientRect(),b=h.getBoundingClientRect();
+ return !!h.shadowRoot.querySelector('.caption').textContent&&b.height>100&&
+   b.top>=Math.max(0,r.top)-2&&b.bottom<=r.bottom+2&&
+   getComputedStyle(h).backgroundColor==='rgba(0, 0, 0, 0)'&&getComputedStyle(h).pointerEvents==='none';
+})()"""
 
 
 def main():
@@ -53,13 +61,19 @@ def main():
             else:result['no_direction_cue']=True;timer.stop();finish()
         elif stage==1 and window.compass.active==target:
             result['checks']['native_caption_direction']=True
-            result['checks']['live_footer_caption']=bool(window.subtitle_strip.current) and directions(window.subtitle_strip.current)==target
+            result['checks']['live_overlay_caption']=bool(window.subtitle_overlay.current) and directions(window.subtitle_overlay.current)==target
+            probe=window.browser.execute_script(OVERLAY_PROBE);stage=11
+        elif stage==11 and probe.IsCompleted:
+            result['checks']['full_page_visible_transparent_overlay']=json.loads(str(probe.Result)) is True
             s.open_official_player();stage=2
         elif stage==2 and 'player.bilibili.com/' in window.address.text() and feed.timeline.cues and feed.video_key[1]=='32294243227':
             window.browser.execute_script('(()=>{let v=document.querySelector("video");v.pause();v.currentTime='+json.dumps(result['direction_test_time'])+'})()')
             stage=3
         elif stage==3 and window.compass.active==target:
             result['checks']['official_player_captions']=True
+            probe=window.browser.execute_script(OVERLAY_PROBE);stage=12
+        elif stage==12 and probe.IsCompleted:
+            result['checks']['official_player_visible_transparent_overlay']=json.loads(str(probe.Result)) is True
             window.media_action('next');stage=4
         elif stage==4 and 'p=4' in window.address.text() and feed.timeline.cues and feed.video_key[1]!='32294243227':
             result['checks']['official_player_next']=True;window.media_action('previous');stage=5
@@ -79,7 +93,7 @@ def main():
             timer.stop();finish()
     timer=QTimer();timer.timeout.connect(step);timer.start(200)
     app.exec();ole.OleUninitialize()
-    return 0 if len(result['checks'])==8 and all(result['checks'].values()) else 1
+    return 0 if len(result['checks'])==10 and all(result['checks'].values()) else 1
 
 
 if __name__=='__main__':sys.exit(main())

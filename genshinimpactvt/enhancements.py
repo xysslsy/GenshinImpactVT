@@ -79,20 +79,20 @@ def install(cls):
             mouse.setChecked(False); self.status.setText('鼠标侧键监听启动失败，请检查设置。')
         scroll = QScrollArea(); scroll.setWidgetResizable(True); self.stack.removeWidget(page); scroll.setWidget(page); self.stack.insertWidget(3, scroll)
         browser_page = self.stack.widget(0); bottom = browser_page.layout().itemAt(2).layout()
-        compact = QPushButton('精简窗口'); compact.clicked.connect(self.toggle_immersive); bottom.addWidget(compact)
+        compact = QPushButton('小窗观看'); compact.clicked.connect(self.enter_mini_player); bottom.addWidget(compact)
         show_compass = QPushButton('显示方向浮窗'); show_compass.clicked.connect(self.show_compass); bottom.addWidget(show_compass)
         if toggle.isChecked():
             pos = self.settings.value('compass/position')
             if pos is not None: self.compass.move(pos)
             self.compass.show()
         self.subtitles = SubtitleController(self.browser,self.compass,self.settings,self)
-        self.subtitles.caption_changed.connect(self.subtitle_strip.set_caption)
-        self.subtitles.enabled_changed.connect(self.subtitle_strip.set_recognition_enabled)
-        self.subtitle_strip.set_recognition_enabled(self.subtitles.enabled)
+        self.subtitles.caption_changed.connect(self.subtitle_overlay.set_caption)
+        self.subtitles.enabled_changed.connect(self.subtitle_overlay.set_recognition_enabled)
+        self.subtitle_overlay.set_recognition_enabled(self.subtitles.enabled)
         footer=self.subtitles.page.show_footer
         footer.setChecked(self.settings.value('subtitles/show_footer',True,type=bool))
-        self.subtitle_strip.setVisible(footer.isChecked())
-        footer.toggled.connect(lambda visible:(self.subtitle_strip.setVisible(visible),self.settings.setValue('subtitles/show_footer',visible)))
+        self.subtitle_overlay.set_visible(footer.isChecked())
+        footer.toggled.connect(lambda visible:(self.subtitle_overlay.set_visible(visible),self.settings.setValue('subtitles/show_footer',visible)))
         subtitle_scroll = QScrollArea(); subtitle_scroll.setWidgetResizable(True); subtitle_scroll.setWidget(self.subtitles.page)
         self.subtitles.page_index = self.stack.addWidget(subtitle_scroll)
         subtitle_nav = QPushButton('字幕识别'); subtitle_nav.setObjectName('nav'); subtitle_nav.setCheckable(True)
@@ -102,15 +102,25 @@ def install(cls):
         self.subtitles.page.show_compass.clicked.connect(self.show_compass)
         self.subtitles.enabled_changed.connect(lambda enabled: self.compass_toggle.setChecked(True) if enabled else None)
         self._fullscreen_core = None
+        self._fullscreen_restore_immersive = None
         def browser_ready():
             self._fullscreen_core = self.browser.web.CoreWebView2
             self._fullscreen_handler = lambda sender, event: self.sync_fullscreen()
             self._fullscreen_core.ContainsFullScreenElementChanged += self._fullscreen_handler
         self.browser.ready.connect(browser_ready)
+        if self.settings.value('window/compact', False, type=bool):
+            self.toggle_immersive()
+            geometry = self.settings.value('window/geometry')
+            if geometry: self.restoreGeometry(geometry)
 
     def sync_fullscreen(self):
         active = bool(self._fullscreen_core.ContainsFullScreenElement)
-        if active != self.immersive: self.toggle_immersive()
+        if active:
+            if self._fullscreen_restore_immersive is None: self._fullscreen_restore_immersive = self.immersive
+            if not self.immersive: self.toggle_immersive()
+        elif self._fullscreen_restore_immersive is not None:
+            if not self._fullscreen_restore_immersive and self.immersive: self.toggle_immersive()
+            self._fullscreen_restore_immersive = None
 
     def current_episode_keys(self):
         return self.system_episode_keys if self.episode_mode.currentData() == 'system' else self.episode_keys
@@ -136,11 +146,20 @@ def install(cls):
         if self.immersive: self.floating.show()
         root_layout = self.centralWidget().layout(); root_layout.itemAt(0).widget().setVisible(not self.immersive)
         layout = self.stack.widget(0).layout()
+        layout.setContentsMargins(0, 0, 0, 0) if self.immersive else layout.setContentsMargins(20, 18, 20, 12)
+        layout.setSpacing(0 if self.immersive else 12)
+        self.setMinimumSize(320, 180) if self.immersive else self.setMinimumSize(480, 300)
         for index in (0, 2):
             row = layout.itemAt(index).layout()
             for i in range(row.count()):
                 widget = row.itemAt(i).widget()
                 if widget: widget.setVisible(not self.immersive)
+
+    def enter_mini_player(self):
+        if not self.immersive: self.toggle_immersive()
+        self.showNormal(); self.resize(480, 300)
+        available = self.screen().availableGeometry()
+        self.move(available.left()+16, available.bottom()-self.frameGeometry().height()-16)
 
     def set_compass(self, enabled):
         self.settings.setValue('compass/enabled', enabled); self.compass.setVisible(enabled)
@@ -230,6 +249,7 @@ def install(cls):
         return old_native(self, event_type, message)
 
     def close(self, event):
+        self.settings.setValue('window/compact', self.immersive)
         self.subtitles.close()
         self.episode_keys.stop()
         self.system_episode_keys.stop()
@@ -241,7 +261,7 @@ def install(cls):
         old_close(self, event)
 
     cls.__init__ = initialize; cls.closeEvent = close; cls.nativeEvent = native
-    cls.toggle_immersive = toggle_immersive; cls.set_compass = set_compass; cls.choose_compass_color = choose_color
+    cls.toggle_immersive = toggle_immersive; cls.enter_mini_player = enter_mini_player; cls.set_compass = set_compass; cls.choose_compass_color = choose_color
     cls.show_compass = show_compass; cls.side_button = side_button; cls.set_mouse_enabled = set_mouse_enabled
     cls.mouse_observed = mouse_observed; cls.set_injected_enabled = set_injected_enabled
     cls.current_mouse = current_mouse; cls.change_mouse_mode = change_mouse_mode
