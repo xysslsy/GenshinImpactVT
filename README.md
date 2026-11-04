@@ -1,19 +1,27 @@
 # GenshinImpactVT
 
-当前版本 **v1.1**（内部版本 1.1.0）。Windows 桌面攻略视频工作台，使用 Python 3.12、PySide6、pythonnet、Microsoft WebView2 WinForms 和 WebView2 Evergreen Runtime，不依赖原版 MaBao。
+当前版本 **v1.2**（内部版本 1.2.0）。Windows 桌面攻略视频工作台，使用 Python 3.12、PySide6、pythonnet、Microsoft WebView2 WinForms 和 WebView2 Evergreen Runtime，不依赖原版 MaBao。
 
 支持 B站 AI/CC 字幕、视频内透明字幕、左下角小窗观看、八向方向氛围光、官方纯播放器、视频快捷控制和本地收藏/历史。查看 [版本记录](CHANGELOG.md)、[本地发行目录](RELEASES.md) 和 [Git 仓库说明](GIT_WORKFLOW.md)。
 
 ## 下载与本机位置
 
-普通用户可从 [v1.1 发布页](https://github.com/xysslsy/GenshinImpactVT/releases/tag/v1.1) 下载并全部解压，双击 `GenshinImpactVT.exe`；也可[直接下载 v1.1 ZIP](https://github.com/xysslsy/GenshinImpactVT/releases/download/v1.1/GenshinImpactVT-v1.1-windows-x64.zip)。
+普通用户可从 [v1.2 发布页](https://github.com/xysslsy/GenshinImpactVT/releases/tag/v1.2) 下载并全部解压，双击 `GenshinImpactVT.exe`；也可[直接下载 v1.2 ZIP](https://github.com/xysslsy/GenshinImpactVT/releases/download/v1.2/GenshinImpactVT-v1.2-windows-x64.zip)。
 
 本机软件文件已集中在 `D:\AINixiang\GenshinImpactVT`：
 
-- 当前版本：`releases\v1.1\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v1.1**。
-- 上一版本：`releases\v1\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v1**。
+- 当前版本：`releases\v1.2\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v1.2**。
+- 上一版本：`releases\v1.1\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v1.1**。
 - ZIP、校验清单和位置说明位于 `releases\`。日常使用上面两版，更早版本已通过 SHA-256 核对后备份至 [GitHub 历史归档](https://github.com/xysslsy/GenshinImpactVT/releases/tag/binary-archive-20261104)。v0.0～v0.3 本地包已清理；v0.4 目录和旧 `.build` 缓存的删除被自动审批策略拦截，暂保留。
 - 当前文件夹即产品 Git 仓库；源码启动使用下方说明中的 `.venv`。原 Gitee 参考仓库与研究资料仍独立保留。
+
+## 同页浏览和卸载
+
+点击 B站个人空间、视频卡片等链接时，网页请求打开的 HTTP(S) 新窗口会直接在当前浏览器中跳转，地址栏同步更新，也可以用前进/后退返回。
+
+卸载便携版：进入 **设置 → 软件管理 → 卸载此版本…**，确认后软件退出并移除此版本和指向它的桌面快捷方式。也可以直接双击程序文件夹内的 **Uninstall.exe**。
+
+默认保留收藏、历史、设置和登录资料；勾选清除个人资料会删除所有版本共用的 `%LOCALAPPDATA%\MaBaoNext`，执行前须退出其他版本。只删除发行清单中内容未被修改的程序文件，额外放入或自行修改的文件会保留；其他发行版本、源码和下载 ZIP 也会保留。卸载助手仅在卸载时运行，临时副本安排在 Windows 重启后清理。
 
 ## 环境和启动
 
@@ -34,7 +42,15 @@ py -3.12 -m venv .venv
 
 SDK 脚本从官方 NuGet 下载固定版本并验证 SHA-256；安装过程需要网络。首次启动打开自带的本地合成视频页面，可输入 HTTP(S) 地址浏览。Evergreen Runtime 或 SDK 缺失时，浏览器底部状态栏显示原因。
 
-需要重新打包轻量版时，先安装 `requirements-dev.txt`，再运行 `python -m PyInstaller --noconfirm --distpath .build/dist --workpath .build/work packaging/GenshinImpactVT-light.spec`。`.build` 是可重建的临时目录，正式保留包位于 `releases/v1.1` 和 `releases/v1`。
+需要重新打包完整轻量便携版时，先安装 `requirements-dev.txt`，再依次运行下列命令。最后一个命令会生成卸载清单和 ZIP，不会覆盖已有发行目录；再次构建请换一个尚不存在的输出目录。
+
+```powershell
+.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --distpath .build/dist --workpath .build/work packaging/GenshinImpactVT-light.spec
+.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --distpath .build/uninstall-dist --workpath .build/uninstall-work packaging/GenshinImpactVT-uninstall.spec
+.\.venv\Scripts\python.exe packaging/prepare_portable.py --dist .build/dist/GenshinImpactVT --helper .build/uninstall-dist/Uninstall.exe --output releases/v1.2
+```
+
+单独运行主程序的 PyInstaller spec 不包含卸载助手和清单，此时卸载按钮禁用。开发源码同样不提供自删除入口。
 
 收藏和历史保存在 `%LOCALAPPDATA%\MaBaoNext\library.sqlite3`；应用设置在同目录 `settings.ini`，浏览器数据在 `browser-profile`。历史包含访问过的完整 URL；浏览器数据与收藏、历史分开保存。点击侧栏可浏览收藏和历史，双击打开、选择后删除。悬浮控制可前进、后退、刷新、设置置顶和恢复主窗口。正常退出后恢复窗口配置及上次网页。
 
