@@ -4,15 +4,22 @@ import json
 import os
 import sys
 from pathlib import Path
+import multiprocessing
 
-# The package smoke test uses a separate profile and never opens the user's data.
+# PyInstaller's spawned OCR worker must branch before loading Qt or .NET.
+if __name__ == '__main__':
+    multiprocessing.freeze_support()
+
+# Default package tests use a separate profile. The explicit Bilibili test uses
+# the normal browser session, with separate application settings/database.
 SMOKE_DIR = None
+BILI_TEST = '--self-test-bili' in sys.argv
 if '--self-test' in sys.argv:
     index = sys.argv.index('--self-test')
     if index + 1 >= len(sys.argv): raise ValueError('--self-test requires a directory')
     SMOKE_DIR = Path(sys.argv[index + 1]).resolve()
     SMOKE_DIR.mkdir(parents=True, exist_ok=True)
-    os.environ['LOCALAPPDATA'] = str(SMOKE_DIR)
+    if not BILI_TEST: os.environ['LOCALAPPDATA'] = str(SMOKE_DIR)
 from PySide6.QtCore import Qt, QSettings, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -21,6 +28,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
 from genshinimpactvt.browser import BrowserHost, DATA, user32
 from genshinimpactvt.storage import Store
 from genshinimpactvt.urls import normalize_url
+from genshinimpactvt.subtitle_strip import SubtitleStrip
 
 user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
 STYLE = '''
@@ -91,6 +99,7 @@ class Main(QMainWindow):
         bottom = QHBoxLayout(); self.status = QLabel('正在启动浏览器…'); self.status.setObjectName('muted'); bottom.addWidget(self.status, 1)
         self.pin = QCheckBox('窗口置顶'); self.pin.toggled.connect(self.set_topmost); bottom.addWidget(self.pin)
         bottom.addWidget(button('悬浮控制', self.toggle_floating)); layout.addLayout(bottom)
+        self.subtitle_strip=SubtitleStrip();layout.addWidget(self.subtitle_strip)
         return page
 
     def make_list(self, kind):
@@ -174,18 +183,41 @@ def main():
     ole = ctypes.OleDLL('ole32'); ole.OleInitialize(None)
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('GenshinImpactVT.Desktop.1')
     app = QApplication(sys.argv[:1]); app.setWindowIcon(QIcon(str(Path(__file__).resolve().parent / 'assets' / 'app.ico')))
-    app.setStyleSheet(STYLE); window = Main()
+    app.setStyleSheet(STYLE); window = Main(SMOKE_DIR/'app') if SMOKE_DIR is not None and BILI_TEST else Main()
     test_result = {'ready': False, 'navigation': False, 'icon': not app.windowIcon().isNull(), 'errors': []}
     if SMOKE_DIR is not None:
+        ocr_test = '--self-test-ocr' in sys.argv
+        finished = False
         window.browser.ready.connect(lambda: test_result.update(ready=True))
         window.browser.navigated.connect(lambda url, success, error: test_result.update(navigation=success))
         window.browser.failed.connect(lambda error: test_result['errors'].append(error))
         def finish_test():
+            nonlocal finished
+            if finished: return
+            finished = True
+            if ocr_test:
+                test_result['ocr'] = '东' in window.compass.active
+                test_result['ocr_text'] = window.subtitles.page.text.text()
+                test_result['ocr_status'] = window.subtitles.page.status.text()
+                test_result['ocr_samples'] = window.subtitles.samples
             (SMOKE_DIR / 'result.json').write_text(json.dumps(test_result, ensure_ascii=False, indent=2), encoding='utf-8')
             window.close()
-        QTimer.singleShot(10000, finish_test)
+        if BILI_TEST:
+            from genshinimpactvt.bilibili_selftest import setup_test
+            setup_test(window,test_result,sys.argv[sys.argv.index('--self-test-bili')+1],finish_test)
+        if ocr_test:
+            def start_ocr_test():
+                service = window.subtitles
+                service.page.mode.setCurrentIndex(service.page.mode.findData('ocr'))
+                service.page.enabled.setChecked(True)
+                service.open_demo()
+            window.browser.ready.connect(lambda: QTimer.singleShot(600,start_ocr_test))
+            ocr_watch = QTimer(window)
+            ocr_watch.timeout.connect(lambda: finish_test() if '东' in window.compass.active else None)
+            ocr_watch.start(200)
+        QTimer.singleShot(30000 if BILI_TEST else 20000 if ocr_test else 10000, finish_test)
     result = app.exec(); ole.OleUninitialize()
-    if SMOKE_DIR is not None and (not test_result['ready'] or not test_result['navigation'] or not test_result['icon'] or test_result['errors']): return 1
+    if SMOKE_DIR is not None and (not test_result['ready'] or not test_result['navigation'] or not test_result['icon'] or test_result['errors'] or test_result.get('ocr') is False or test_result.get('native_subtitles') is False): return 1
     return result
 
 if __name__ == '__main__': sys.exit(main())

@@ -5,13 +5,15 @@ from ctypes import wintypes
 
 from PySide6.QtCore import Qt, QTimer, QPoint
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QCheckBox, QColorDialog, QComboBox, QLabel, QPushButton, QScrollArea
+from PySide6.QtWidgets import QCheckBox, QColorDialog, QComboBox, QLabel, QPushButton, QScrollArea, QSlider, QSpinBox
 
 from .browser import user32
 from .compass import Compass
 from .mouse_buttons import SideButtons
 from .raw_mouse import RawMouse
 from .episode_keys import EpisodeKeys, SystemEpisodeKeys
+from .subtitles import SubtitleController
+from .bilibili_subtitles import official_episode_url
 
 def on_bilibili(self):
     host = (urlsplit(self.address.text()).hostname or '').lower()
@@ -22,7 +24,7 @@ def install(cls):
 
     def initialize(self, *args, **kwargs):
         old_init(self, *args, **kwargs)
-        self.immersive = False; self.subtitle_task = None
+        self.immersive = False
         self.compass = Compass(); color = QColor(self.settings.value('compass/color', '#4080ff'))
         if color.isValid(): self.compass.color = color
         page = self.stack.widget(3); box = page.layout()
@@ -42,6 +44,21 @@ def install(cls):
         elif episode_toggle.isChecked(): self.episode_status.setText('7 / 8 已启用。')
         toggle = QCheckBox('启用字幕方向浮窗（拖动文字调整位置）'); self.compass_toggle = toggle; toggle.setChecked(self.settings.value('compass/enabled', False, type=bool)); toggle.toggled.connect(self.set_compass); box.insertWidget(box.count()-1, toggle)
         color_button = QPushButton('选择方向高亮颜色'); color_button.clicked.connect(self.choose_compass_color); box.insertWidget(box.count()-1, color_button)
+        ambient=QCheckBox('方向氛围光（东北等斜向只亮对应区域）')
+        ambient.setChecked(self.settings.value('compass/glow_enabled',True,type=bool))
+        self.compass.set_glow_enabled(ambient.isChecked());box.insertWidget(box.count()-1,ambient)
+        ambient.toggled.connect(lambda value:(self.compass.set_glow_enabled(value),self.settings.setValue('compass/glow_enabled',value)))
+        glow_note=QLabel('圆形柔光短暂亮起后淡出，背景透明；可拖动整个方向浮窗对准小地图。')
+        glow_note.setWordWrap(True);box.insertWidget(box.count()-1,glow_note)
+        box.insertWidget(box.count()-1,QLabel('氛围光强度'))
+        self.glow_strength=QSlider(Qt.Orientation.Horizontal);self.glow_strength.setRange(15,100)
+        self.glow_strength.setValue(self.settings.value('compass/glow_strength',75,type=int))
+        self.compass.set_strength(self.glow_strength.value());box.insertWidget(box.count()-1,self.glow_strength)
+        self.glow_strength.valueChanged.connect(lambda value:(self.compass.set_strength(value),self.settings.setValue('compass/glow_strength',value)))
+        self.glow_size=QSpinBox();self.glow_size.setRange(140,420);self.glow_size.setSuffix(' px · 方向浮窗大小')
+        self.glow_size.setValue(self.settings.value('compass/glow_size',240,type=int))
+        self.compass.set_extent(self.glow_size.value());box.insertWidget(box.count()-1,self.glow_size)
+        self.glow_size.valueChanged.connect(lambda value:(self.compass.set_extent(value),self.settings.setValue('compass/glow_size',value)))
         mouse = QCheckBox('鼠标侧键：上键播放/暂停，下键快退 5 秒'); self.mouse_toggle = mouse; mouse.setChecked(self.settings.value('mouse/enabled', True, type=bool)); box.insertWidget(box.count()-1, mouse)
         mouse_note = QLabel('同时保留鼠标原有功能；某些游戏或鼠标驱动可能接管侧键。'); mouse_note.setWordWrap(True); box.insertWidget(box.count()-1, mouse_note)
         self.side_buttons = SideButtons(self); self.side_buttons.pressed.connect(self.side_button, Qt.ConnectionType.QueuedConnection)
@@ -68,7 +85,22 @@ def install(cls):
             pos = self.settings.value('compass/position')
             if pos is not None: self.compass.move(pos)
             self.compass.show()
-        self.subtitle_timer = QTimer(self); self.subtitle_timer.timeout.connect(self.poll_subtitles); self.subtitle_timer.start(500)
+        self.subtitles = SubtitleController(self.browser,self.compass,self.settings,self)
+        self.subtitles.caption_changed.connect(self.subtitle_strip.set_caption)
+        self.subtitles.enabled_changed.connect(self.subtitle_strip.set_recognition_enabled)
+        self.subtitle_strip.set_recognition_enabled(self.subtitles.enabled)
+        footer=self.subtitles.page.show_footer
+        footer.setChecked(self.settings.value('subtitles/show_footer',True,type=bool))
+        self.subtitle_strip.setVisible(footer.isChecked())
+        footer.toggled.connect(lambda visible:(self.subtitle_strip.setVisible(visible),self.settings.setValue('subtitles/show_footer',visible)))
+        subtitle_scroll = QScrollArea(); subtitle_scroll.setWidgetResizable(True); subtitle_scroll.setWidget(self.subtitles.page)
+        self.subtitles.page_index = self.stack.addWidget(subtitle_scroll)
+        subtitle_nav = QPushButton('字幕识别'); subtitle_nav.setObjectName('nav'); subtitle_nav.setCheckable(True)
+        subtitle_nav.clicked.connect(lambda: self.select(self.subtitles.page_index))
+        self.navbuttons.append(subtitle_nav)
+        self.centralWidget().layout().itemAt(0).widget().layout().insertWidget(5,subtitle_nav)
+        self.subtitles.page.show_compass.clicked.connect(self.show_compass)
+        self.subtitles.enabled_changed.connect(lambda enabled: self.compass_toggle.setChecked(True) if enabled else None)
         self._fullscreen_core = None
         def browser_ready():
             self._fullscreen_core = self.browser.web.CoreWebView2
@@ -162,6 +194,13 @@ def install(cls):
             else: self.showMaximized()
             return
         if not on_bilibili(self): self.status.setText('视频快捷键仅支持哔哩哔哩页面'); return
+        if action in ('previous','next'):
+            try:
+                target=official_episode_url(self.address.text(),-1 if action=='previous' else 1)
+                if target:
+                    self.open_url(target);return
+            except ValueError as exc:
+                self.status.setText(str(exc));return
         script = '''(()=>{const action=ACTION;const v=document.querySelector('video');
           if(action==='previous'||action==='next'){const items=Array.from(document.querySelectorAll('.video-pod__item'));const idx=items.findIndex(x=>x.classList.contains('active'));const target=items[idx+(action==='previous'?-1:1)];
           if(idx>=0&&target){target.click();return 'ok'}const selectors=action==='next'?['.bpx-player-ctrl-next','a[title="下一集"]']:['.bpx-player-ctrl-prev','a[title="上一集"]'];
@@ -180,21 +219,6 @@ def install(cls):
             QTimer.singleShot(50, done)
         except Exception as exc: self.error(str(exc))
 
-    def poll_subtitles(self):
-        if not self.compass.isVisible() or not self.browser.web or not on_bilibili(self): return
-        if self.subtitle_task is not None:
-            if not self.subtitle_task.IsCompleted: return
-            try:
-                text = json.loads(str(self.subtitle_task.Result))
-                if isinstance(text, str) and text and text != getattr(self, 'last_subtitle', ''):
-                    self.last_subtitle = text; self.compass.set_text(text[:500])
-                elif not text: self.last_subtitle = ''
-            except Exception: pass
-            self.subtitle_task = None
-        try:
-            self.subtitle_task = self.browser.execute_script('''(()=>{let v=document.querySelector('video');if(!v)return '';let cues=[];for(const t of v.textTracks){if(t.activeCues)for(const c of t.activeCues)cues.push(c.text||'');}if(cues.length)return cues.join(' ');return Array.from(document.querySelectorAll('.bpx-player-subtitle-panel-text, .bpx-player-subtitle-item-text')).map(x=>x.textContent).join(' ');})()''')
-        except Exception: self.subtitle_task = None
-
     def native(self, event_type, message):
         msg = wintypes.MSG.from_address(int(message))
         if msg.message == 0x00ff and hasattr(self, 'raw_mouse'):
@@ -206,7 +230,7 @@ def install(cls):
         return old_native(self, event_type, message)
 
     def close(self, event):
-        self.subtitle_timer.stop()
+        self.subtitles.close()
         self.episode_keys.stop()
         self.system_episode_keys.stop()
         self.side_buttons.stop()
@@ -224,4 +248,4 @@ def install(cls):
     cls.sync_fullscreen = sync_fullscreen
     cls.set_episode_keys = set_episode_keys
     cls.current_episode_keys = current_episode_keys; cls.change_episode_mode = change_episode_mode
-    cls.media_action = media_action; cls.poll_subtitles = poll_subtitles
+    cls.media_action = media_action

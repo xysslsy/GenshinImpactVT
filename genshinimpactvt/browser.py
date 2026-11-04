@@ -74,7 +74,7 @@ class BrowserHost(QWidget):
             from System.Windows.Forms import DockStyle, Panel
             from Microsoft.Web.WebView2.WinForms import WebView2, CoreWebView2CreationProperties
 
-            DATA.mkdir(exist_ok=True)
+            DATA.mkdir(parents=True,exist_ok=True)
             self._uri = Uri
             self.panel = Panel()
             self.panel.CreateControl()
@@ -138,6 +138,20 @@ class BrowserHost(QWidget):
         if not self.web or not self.web.CoreWebView2:
             raise RuntimeError("WebView2 尚未就绪")
         return self.web.CoreWebView2.ExecuteScriptAsync(script)
+
+    def capture_preview(self):
+        """Start on the Qt/.NET UI thread; caller polls the returned Task."""
+        if not self.web or not self.web.CoreWebView2:
+            raise RuntimeError('WebView2 尚未就绪')
+        from System.IO import MemoryStream
+        from Microsoft.Web.WebView2.Core import CoreWebView2CapturePreviewImageFormat
+        stream = MemoryStream()
+        try:
+            task = self.web.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, stream)
+            return task, stream
+        except Exception:
+            stream.Dispose()
+            raise
 
     def _resize_native(self):
         if self.panel and not self._disposed:
