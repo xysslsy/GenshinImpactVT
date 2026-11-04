@@ -4,8 +4,9 @@ import ctypes
 import os
 import winreg
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtWidgets import QWidget
+from .urls import normalize_url
 
 ROOT = Path(__file__).resolve().parent.parent
 SDK = ROOT / ".deps" / "webview2"
@@ -50,6 +51,8 @@ class BrowserHost(QWidget):
         self._dll_cookie = None
         self._disposed = False
         self._loading = False
+        self._core = None
+        self._new_window_handler = self._on_new_window
 
     def start(self, initial_url):
         version = evergreen_version()
@@ -106,7 +109,20 @@ class BrowserHost(QWidget):
         if not event.IsSuccess:
             self.failed.emit(f"WebView2 创建失败：{event.InitializationException}")
             return
+        self._core = self.web.CoreWebView2
+        self._core.NewWindowRequested += self._new_window_handler
         self.ready.emit()
+
+    def _on_new_window(self, sender, event):
+        # Suppress the default popup first, including for unsupported schemes.
+        event.Handled = True
+        try:
+            url = normalize_url(str(event.Uri))
+        except ValueError:
+            self.failed.emit('此链接不是 HTTP(S) 网页，无法在当前页面打开。')
+            return
+        # Navigate after returning from the COM callback, avoiding reentrancy.
+        QTimer.singleShot(0, lambda: self.navigate(url) if not self._disposed else None)
 
     def _on_navigation(self, sender, event):
         self._loading = False
@@ -176,6 +192,9 @@ class BrowserHost(QWidget):
             return
         self._disposed = True
         if self.web:
+            if self._core is not None:
+                self._core.NewWindowRequested -= self._new_window_handler
+                self._core = None
             try:
                 self.web.CoreWebView2InitializationCompleted -= self._subscriptions[0]
                 self.web.NavigationCompleted -= self._subscriptions[1]

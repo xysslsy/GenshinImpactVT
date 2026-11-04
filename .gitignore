@@ -23,6 +23,7 @@ tmp*/
 .test-glow/
 .test-footer/
 .test-overlay/
+.test-same-page/
 .test-v1/
 *.lnk
 releases/
