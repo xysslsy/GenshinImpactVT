@@ -41,7 +41,8 @@ def finish():
     win.close()
 QTimer.singleShot(3500, start); QTimer.singleShot(15000, app.quit)
 app.exec(); ole.OleUninitialize()
-probe = enhancements.SystemEpisodeKeys(None)
+from genshinimpactvt.shortcuts import SystemKeys
+probe = SystemKeys(None); probe.bindings = win.shortcuts.bindings
 released = probe.start(); probe.stop()
 check('keys_released_after_exit', released)
 sys.exit(0 if len(checks)==4 and all(checks.values()) else 1)

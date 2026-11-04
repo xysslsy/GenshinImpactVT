@@ -238,7 +238,7 @@ class SubtitleController(QObject):
         self.page.text.setText(text or '未识别到字幕')
         self.publish_caption(text,source)
         if accepted is not None: self.compass.set_text(accepted)
-        elif not text: self.compass.clear()
+        # Direction hold expires independently of subtitle gaps/non-direction sentences.
 
     def read_page(self, now):
         if self._page_task is not None:

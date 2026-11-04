@@ -75,6 +75,15 @@ class ControllerTests(unittest.TestCase):
         service.deliver('向北走','dom')
         self.assertEqual(service.compass.active,{'北'})
 
+    def test_subtitle_gaps_keep_direction_but_navigation_clears(self):
+        service=self.service
+        service.deliver('向东北走','platform'); service.deliver('','platform')
+        service.deliver('打开宝箱','platform')
+        self.assertEqual(service.compass.active,{'东','北'})
+        self.assertTrue(service.compass.expiry.isActive())
+        service.reset_timeline()
+        self.assertFalse(service.compass.active)
+
     def test_region_and_mode_survive_restart(self):
         service=self.service;service.region=(.1,.6,.8,.3);service.save_region()
         service.page.mode.setCurrentIndex(service.page.mode.findData('ocr'))

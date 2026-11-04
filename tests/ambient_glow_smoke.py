@@ -30,8 +30,8 @@ def main():
     def start():
         win.subtitles.deliver('往东北方向走','platform')
         QTimer.singleShot(350,hold)
-        QTimer.singleShot(2300,fade)
-        QTimer.singleShot(2800,finish)
+        QTimer.singleShot(5200,fade)
+        QTimer.singleShot(5800,finish)
     def hold():
         c=win.compass
         result['northeast_active']=c.active=={'东','北'}

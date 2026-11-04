@@ -11,7 +11,8 @@ from .browser import user32
 from .compass import Compass
 from .mouse_buttons import SideButtons
 from .raw_mouse import RawMouse
-from .episode_keys import EpisodeKeys, SystemEpisodeKeys
+from .shortcuts import Shortcuts
+from .window_controls import WindowControls
 from .subtitles import SubtitleController
 from .bilibili_subtitles import official_episode_url
 
@@ -28,20 +29,22 @@ def install(cls):
         self.compass = Compass(); color = QColor(self.settings.value('compass/color', '#4080ff'))
         if color.isValid(): self.compass.color = color
         page = self.stack.widget(3); box = page.layout()
-        episode_toggle = QCheckBox('启用 7 上一集 / 8 下一集'); self.episode_toggle = episode_toggle
-        episode_toggle.setChecked(self.settings.value('episode_keys/enabled', True, type=bool)); box.insertWidget(box.count()-1, episode_toggle)
-        notice = QLabel('系统全局方式会占用 7、8，其他程序可能无法输入这两个键；关闭或切回普通监听即可恢复。'); notice.setWordWrap(True); box.insertWidget(box.count()-1, notice)
-        self.episode_keys = EpisodeKeys(self); self.episode_keys.pressed.connect(self.media_action, Qt.ConnectionType.QueuedConnection)
-        self.system_episode_keys = SystemEpisodeKeys(int(self.winId()))
-        self.episode_mode = QComboBox(); self.episode_mode.addItem('普通监听（不占用按键）', 'hook'); self.episode_mode.addItem('系统全局热键（占用 7、8）', 'system')
-        selected = self.episode_mode.findData(self.settings.value('episode_keys/mode', 'hook'))
-        self.episode_mode.setCurrentIndex(max(0, selected)); box.insertWidget(box.count()-1, self.episode_mode)
-        self.episode_status = QLabel(''); self.episode_status.setWordWrap(True); box.insertWidget(box.count()-1, self.episode_status)
+        episode_toggle = QCheckBox('启用全局键盘快捷键'); self.episode_toggle = episode_toggle
+        episode_toggle.setChecked(self.settings.value('episode_keys/enabled', True, type=bool))
+        box.insertWidget(box.count()-1, episode_toggle)
+        self.episode_mode = QComboBox()
+        self.episode_mode.addItem('普通监听（保留按键原有功能）', 'hook')
+        self.episode_mode.addItem('系统全局热键（占用所设按键）', 'system')
+        self.episode_mode.setCurrentIndex(max(0,self.episode_mode.findData(self.settings.value('episode_keys/mode','hook'))))
+        box.insertWidget(box.count()-1,self.episode_mode)
+        self.episode_status = QLabel(''); self.episode_status.setWordWrap(True)
+        box.insertWidget(box.count()-1,self.episode_status)
+        self.shortcuts = Shortcuts(self)
+        self.episode_keys = self.shortcuts.hook; self.system_episode_keys = self.shortcuts.system
+        box.insertWidget(box.count()-1,self.shortcuts.page)
         self.episode_mode.currentIndexChanged.connect(self.change_episode_mode)
         episode_toggle.toggled.connect(self.set_episode_keys)
-        if episode_toggle.isChecked() and not self.current_episode_keys().start():
-            episode_toggle.setChecked(False); self.episode_status.setText('7 / 8 启用失败，可能已被占用，请切换监听方式。')
-        elif episode_toggle.isChecked(): self.episode_status.setText('7 / 8 已启用。')
+        self.shortcuts.start()
         toggle = QCheckBox('启用字幕方向浮窗（拖动文字调整位置）'); self.compass_toggle = toggle; toggle.setChecked(self.settings.value('compass/enabled', False, type=bool)); toggle.toggled.connect(self.set_compass); box.insertWidget(box.count()-1, toggle)
         color_button = QPushButton('选择方向高亮颜色'); color_button.clicked.connect(self.choose_compass_color); box.insertWidget(box.count()-1, color_button)
         ambient=QCheckBox('方向氛围光（东北等斜向只亮对应区域）')
@@ -59,7 +62,11 @@ def install(cls):
         self.glow_size.setValue(self.settings.value('compass/glow_size',240,type=int))
         self.compass.set_extent(self.glow_size.value());box.insertWidget(box.count()-1,self.glow_size)
         self.glow_size.valueChanged.connect(lambda value:(self.compass.set_extent(value),self.settings.setValue('compass/glow_size',value)))
-        mouse = QCheckBox('鼠标侧键：上键播放/暂停，下键快退 5 秒'); self.mouse_toggle = mouse; mouse.setChecked(self.settings.value('mouse/enabled', True, type=bool)); box.insertWidget(box.count()-1, mouse)
+        self.glow_duration = QSpinBox(); self.glow_duration.setRange(1,30); self.glow_duration.setSuffix(' 秒 · 方向高亮保持时间')
+        self.glow_duration.setValue(self.settings.value('compass/hold_seconds',5,type=int))
+        self.compass.set_hold_seconds(self.glow_duration.value()); box.insertWidget(box.count()-1,self.glow_duration)
+        self.glow_duration.valueChanged.connect(lambda value:(self.compass.set_hold_seconds(value),self.settings.setValue('compass/hold_seconds',value)))
+        mouse = QCheckBox('启用鼠标侧键（动作在自定义快捷键中设置）'); self.mouse_toggle = mouse; mouse.setChecked(self.settings.value('mouse/enabled', True, type=bool)); box.insertWidget(box.count()-1, mouse)
         mouse_note = QLabel('同时保留鼠标原有功能；某些游戏或鼠标驱动可能接管侧键。'); mouse_note.setWordWrap(True); box.insertWidget(box.count()-1, mouse_note)
         self.side_buttons = SideButtons(self); self.side_buttons.pressed.connect(self.side_button, Qt.ConnectionType.QueuedConnection)
         self.raw_mouse = RawMouse(int(self.winId()), self); self.raw_mouse.pressed.connect(self.side_button, Qt.ConnectionType.QueuedConnection)
@@ -118,6 +125,7 @@ def install(cls):
             self._fullscreen_handler = lambda sender, event: self.sync_fullscreen()
             self._fullscreen_core.ContainsFullScreenElementChanged += self._fullscreen_handler
         self.browser.ready.connect(browser_ready)
+        self.window_controls = WindowControls(self)
         if self.settings.value('window/compact', False, type=bool):
             self.toggle_immersive()
             geometry = self.settings.value('window/geometry')
@@ -136,24 +144,18 @@ def install(cls):
         return self.system_episode_keys if self.episode_mode.currentData() == 'system' else self.episode_keys
 
     def change_episode_mode(self):
-        self.episode_keys.stop(); self.system_episode_keys.stop()
-        if self.episode_toggle.isChecked() and not self.current_episode_keys().start():
-            self.episode_status.setText('7 / 8 启用失败，可能已被占用，请切回普通监听。')
-        else:
-            self.settings.setValue('episode_keys/mode', self.episode_mode.currentData())
-            self.episode_status.setText('7 / 8 已启用。' if self.episode_toggle.isChecked() else '7 / 8 已关闭。')
+        self.settings.setValue('episode_keys/mode',self.episode_mode.currentData())
+        self.shortcuts.start()
 
     def set_episode_keys(self, enabled):
-        if enabled and not self.current_episode_keys().start():
-            self.episode_toggle.blockSignals(True); self.episode_toggle.setChecked(False); self.episode_toggle.blockSignals(False)
-            self.episode_status.setText('7 / 8 启用失败，可能已被占用。'); return
-        if not enabled: self.episode_keys.stop(); self.system_episode_keys.stop()
-        self.episode_status.setText('7 / 8 已启用。' if enabled else '7 / 8 已关闭。')
-        self.settings.setValue('episode_keys/enabled', enabled)
+        self.settings.setValue('episode_keys/enabled',enabled)
+        self.shortcuts.start()
+        if not enabled: self.episode_status.setText('键盘快捷键已关闭，可用托盘唤出控制条。')
 
     def toggle_immersive(self):
         self.immersive = not self.immersive; self.select(0)
-        if self.immersive: self.floating.show()
+        # Keep compact mode free of controls, with recovery through the tray or window menu.
+        if self.immersive and not self.window_controls.system_menu_available and not self.window_controls.tray.isVisible(): self.floating.show()
         root_layout = self.centralWidget().layout(); root_layout.itemAt(0).widget().setVisible(not self.immersive)
         layout = self.stack.widget(0).layout()
         layout.setContentsMargins(0, 0, 0, 0) if self.immersive else layout.setContentsMargins(20, 18, 20, 12)
@@ -179,7 +181,8 @@ def install(cls):
         self.compass_toggle.setChecked(True); self.compass.show(); self.compass.raise_()
 
     def side_button(self, which):
-        self.media_action('pause' if which == 2 else 'back')
+        action = self.shortcuts.mouse.get(which)
+        if action: self.shortcuts.dispatch(action)
 
     def mouse_observed(self, which, injected):
         self.mouse_count += 1
@@ -213,9 +216,13 @@ def install(cls):
             self.compass.color = color; self.compass.update(); self.settings.setValue('compass/color', color.name())
 
     def media_action(self, action):
+        if action == 'controls': self.toggle_floating(); return
+        if action == 'restore': self.restore_normal(); return
+        if action == 'compass':
+            self.compass_toggle.setChecked(not self.compass_toggle.isChecked()); return
         if action == 'immersive': self.toggle_immersive(); return
         if action == 'visible':
-            if self.isVisible() and not self.isMinimized(): self.floating.show(); self.hide()
+            if self.isVisible() and not self.isMinimized(): self.hide()
             else: self.restore_main()
             return
         if action == 'maximize':
@@ -255,14 +262,13 @@ def install(cls):
         if msg.message == 0x0312 and hasattr(self, 'system_episode_keys'):
             action = self.system_episode_keys.action(msg.wParam)
             if action:
-                self.media_action(action); return True, 0
+                self.shortcuts.dispatch(action); return True, 0
         return old_native(self, event_type, message)
 
     def close(self, event):
         self.settings.setValue('window/compact', self.immersive)
         self.subtitles.close()
-        self.episode_keys.stop()
-        self.system_episode_keys.stop()
+        self.shortcuts.stop()
         self.side_buttons.stop()
         self.raw_mouse.stop()
         if self._fullscreen_core is not None:

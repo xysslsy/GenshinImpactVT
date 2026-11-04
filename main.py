@@ -57,12 +57,24 @@ class Floating(QWidget):
     def __init__(self, main):
         super().__init__(None, Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint)
         self.main = main; self.setWindowTitle(APP_TITLE+' · 控制')
-        layout = QHBoxLayout(self); layout.setContentsMargins(8,8,8,8)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        container = QVBoxLayout(self); container.setContentsMargins(8,8,8,8)
+        layout = QHBoxLayout(); container.addLayout(layout)
         layout.addWidget(button('←', main.browser.back)); layout.addWidget(button('→', main.browser.forward))
         layout.addWidget(button('刷新', main.browser.reload))
         self.pin = QCheckBox('置顶'); self.pin.toggled.connect(main.set_topmost); layout.addWidget(self.pin)
+        layout = QHBoxLayout(); container.addLayout(layout)
         layout.addWidget(button('显示主窗口', main.restore_main))
-        layout.addWidget(button('显示 / 隐藏工具栏', main.toggle_immersive))
+        layout.addWidget(button('恢复正常界面', main.restore_normal))
+        layout.addWidget(button('收起', self.hide))
+
+    def hideEvent(self, event):
+        self.main.settings.setValue('controls/position', self.pos())
+        super().hideEvent(event)
+
+    def closeEvent(self, event):
+        if getattr(self.main, '_closing', False): event.accept()
+        else: self.hide(); event.ignore()
 
 class Main(QMainWindow):
     def __init__(self, data_dir=DATA):
@@ -196,13 +208,27 @@ class Main(QMainWindow):
             self.settings.setValue('window/topmost', enabled)
         else:
             self.status.setText('设置窗口置顶失败，请重试。')
-    def toggle_floating(self): self.floating.setVisible(not self.floating.isVisible())
+    def toggle_floating(self):
+        if hasattr(self, "window_controls"): self.window_controls.toggle()
+        else: self.floating.setVisible(not self.floating.isVisible())
+
+    def restore_normal(self):
+        self._fullscreen_restore_immersive = None
+        if getattr(self, "immersive", False): self.toggle_immersive()
+        if self.width() < 900 or self.height() < 560: self.resize(960, 620)
+        self.restore_main()
+        try: self.browser.execute_script("if(document.fullscreenElement)document.exitFullscreen()")
+        except Exception: pass
     def restore_main(self): self.showNormal(); self.raise_(); self.activateWindow()
 
     def nativeEvent(self, event_type, message):
+        if hasattr(self, "window_controls") and self.window_controls.handle_native(wintypes.MSG.from_address(int(message))):
+            return True, 0
         return super().nativeEvent(event_type, message)
 
     def closeEvent(self, event):
+        self._closing = True
+        if hasattr(self, 'window_controls'): self.window_controls.close()
         self.settings.setValue('window/geometry', self.saveGeometry()); self.settings.sync()
         self.floating.close(); self.browser.close_browser(); self.store.close(); super().closeEvent(event); QApplication.instance().quit()
 

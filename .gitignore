@@ -25,6 +25,7 @@ tmp*/
 .test-overlay/
 .test-same-page/
 .test-v1/
+.test-controls-v13/
 *.lnk
 releases/
 dist/

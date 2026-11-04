@@ -69,5 +69,15 @@ class GlowTests(unittest.TestCase):
         self.overlay._fade_out();self.settle()
         self.assertFalse(self.overlay.active);self.assertFalse(self.overlay.expiry.isActive())
 
+    def test_longer_hold_survives_gaps_and_updates_direction(self):
+        self.overlay.set_text('向东北走'); self.settle()
+        self.assertEqual(self.overlay.expiry.interval(),5000)
+        self.overlay.set_text(''); self.overlay.set_text('打开宝箱')
+        self.assertEqual(self.overlay.active,{'东','北'})
+        self.overlay.set_hold_seconds(10)
+        self.assertEqual(self.overlay.expiry.interval(),10000)
+        self.overlay.set_text('向西走');self.assertEqual(self.overlay.active,{'西'})
+        self.overlay.set_hold_seconds(100);self.assertEqual(self.overlay.hold_seconds,30)
+
 
 if __name__=='__main__':unittest.main()

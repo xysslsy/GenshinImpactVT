@@ -26,7 +26,7 @@ class Compass(QWidget):
         self.setAutoFillBackground(False);self.setStyleSheet('background:transparent;')
         self.resize(240, 240)
         self.color = QColor('#4080ff')
-        self.glow_enabled=True;self.strength=.75
+        self.glow_enabled=True;self.strength=.75;self.hold_seconds=5
         self.active = set()
         self._drag = None
         self._opacity=0.;self._phase='off'
@@ -39,15 +39,18 @@ class Compass(QWidget):
 
     def set_text(self, text):
         active=directions(text)
-        if not active:
-            self.clear();return
+        if not active: return  # Subtitle gaps must not cancel the last direction cue.
         changed=active!=self.active
         self.active=active
         if self.isVisible() and self.glow_enabled and (changed or self._phase in ('off','out')):
             self._start_animation(0. if changed else self._opacity,1.,160,'in')
         else:
             self.animation.stop();self._opacity=1.;self._phase='hold';self.update()
-        self.expiry.start(2050 if self.glow_enabled else 2500)
+        self.expiry.start(self.hold_seconds*1000)
+
+    def set_hold_seconds(self, seconds):
+        self.hold_seconds=max(1,min(30,int(seconds)))
+        if self.expiry.isActive(): self.expiry.start(self.hold_seconds*1000)
 
     def clear(self):
         self.expiry.stop();self.animation.stop()
