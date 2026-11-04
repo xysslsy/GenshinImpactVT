@@ -24,7 +24,7 @@ from PySide6.QtCore import Qt, QSettings, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QLineEdit, QListWidget, QListWidgetItem, QStackedWidget,
-    QCheckBox)
+    QCheckBox, QMessageBox)
 from genshinimpactvt.browser import BrowserHost, DATA, user32
 from genshinimpactvt.storage import Store
 from genshinimpactvt.urls import normalize_url
@@ -116,6 +116,35 @@ class Main(QMainWindow):
         title = QLabel('设置'); title.setObjectName('heading'); box.addWidget(title)
         info = QLabel('视频控制'); info.setObjectName('muted'); box.addWidget(info)
         box.addStretch(); return page
+
+    def request_uninstall(self):
+        from genshinimpactvt.uninstaller import load_install, digest, HELPER
+        import subprocess
+        try:
+            if not getattr(sys, 'frozen', False):
+                raise ValueError('开发源码不提供卸载，请使用便携版的卸载入口。')
+            root, manifest = load_install(Path(sys.executable).parent)
+            if digest(root/HELPER) != manifest['files'][HELPER]:
+                raise ValueError('卸载程序校验失败，请重新下载完整便携包。')
+            dialog = QMessageBox(self)
+            dialog.setWindowTitle('卸载 GenshinImpactVT')
+            dialog.setIcon(QMessageBox.Icon.Question)
+            dialog.setText('卸载当前版本？')
+            dialog.setInformativeText('将关闭软件并移除此版本及对应桌面快捷方式。其他版本保留。\n\n'+str(root))
+            purge = QCheckBox('同时删除所有版本共用的收藏、历史、设置和登录资料')
+            purge.setChecked(False); dialog.setCheckBox(purge)
+            dialog.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+            dialog.button(QMessageBox.StandardButton.Yes).setText('卸载此版本')
+            dialog.button(QMessageBox.StandardButton.Cancel).setText('取消')
+            dialog.setDefaultButton(QMessageBox.StandardButton.Cancel)
+            if dialog.exec() != QMessageBox.StandardButton.Yes:
+                return
+            arguments = [str(root/HELPER),'--from-app','--wait-pid',str(os.getpid())]
+            if purge.isChecked(): arguments.append('--purge-user-data')
+            subprocess.Popen(arguments,cwd=root,creationflags=subprocess.CREATE_NO_WINDOW)
+            self.close()
+        except Exception as exc:
+            QMessageBox.warning(self, '无法卸载', str(exc))
 
     def select(self, index):
         self.stack.setCurrentIndex(index)

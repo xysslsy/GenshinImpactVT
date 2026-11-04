@@ -77,6 +77,16 @@ def install(cls):
         self.mouse_mode.currentIndexChanged.connect(self.change_mouse_mode)
         if mouse.isChecked() and not self.current_mouse().start():
             mouse.setChecked(False); self.status.setText('鼠标侧键监听启动失败，请检查设置。')
+        box.insertWidget(box.count()-1,QLabel('软件管理'))
+        self.uninstall_button = QPushButton('卸载此版本…')
+        self.uninstall_button.clicked.connect(self.request_uninstall)
+        import sys
+        from pathlib import Path
+        from .uninstaller import MARKER, HELPER
+        install_root = Path(sys.executable).parent
+        self.uninstall_button.setEnabled(bool(getattr(sys,'frozen',False)) and (install_root/MARKER).is_file() and (install_root/HELPER).is_file())
+        self.uninstall_button.setToolTip('卸载便携版；默认保留个人资料。开发源码不提供卸载。')
+        box.insertWidget(box.count()-1,self.uninstall_button)
         scroll = QScrollArea(); scroll.setWidgetResizable(True); self.stack.removeWidget(page); scroll.setWidget(page); self.stack.insertWidget(3, scroll)
         browser_page = self.stack.widget(0); bottom = browser_page.layout().itemAt(2).layout()
         compact = QPushButton('小窗观看'); compact.clicked.connect(self.enter_mini_player); bottom.addWidget(compact)
