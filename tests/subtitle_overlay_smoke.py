@@ -149,6 +149,18 @@ def main():
         state = yield from js("!document.getElementById('genshinimpactvt-caption-overlay')&&window.__genshinimpactvtCaptionTrack.mode==='disabled'")
         check('hide_disables_both_renderers', state)
         win.subtitles.page.show_footer.setChecked(True)
+        state = yield from js("""(() => {
+          const t=window.__genshinimpactvtCaptionTrack;
+          return t.mode==='showing'&&t.cues.length===1&&
+            document.querySelector('video').textTracks.length===2;
+        })()""")
+        check('native_track_reused_after_hide_and_show', state)
+        win.subtitle_overlay.set_caption('向北继续走', 'platform')
+        state = yield from js("""(() => {
+          const t=window.__genshinimpactvtCaptionTrack;
+          return t.mode==='showing'&&t.cues.length===1&&t.cues[0].text.includes('向北继续走');
+        })()""")
+        check('native_caption_replaces_previous_cue', state)
         yield from js('document.exitFullscreen();true')
         yield from delay(.3)
         win.subtitles.page.enabled.setChecked(False)
@@ -181,7 +193,7 @@ def main():
     result = {'checks':checks, 'errors':errors}
     (DATA/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
     print(json.dumps(result,ensure_ascii=True),flush=True)
-    return 0 if len(checks)==17 and all(checks.values()) and not errors else 1
+    return 0 if len(checks)==19 and all(checks.values()) and not errors else 1
 
 
 if __name__ == '__main__':

@@ -36,8 +36,10 @@ OVERLAY_SCRIPT = r"""
     window[key] = state;
     state.hideTrack = () => {
       if (state.track) {
-        state.track.mode = 'disabled';
+        // Disabled tracks may expose cues as null; clear while hidden first.
+        state.track.mode = 'hidden';
         for (const cue of Array.from(state.track.cues || [])) state.track.removeCue(cue);
+        state.track.mode = 'disabled';
       }
     };
     state.place = () => {
@@ -65,6 +67,7 @@ OVERLAY_SCRIPT = r"""
           state.tracks.set(v,state.track);
         }
         window.__genshinimpactvtCaptionTrack = state.track;
+        state.track.mode = 'hidden';
         const safeText = '<c.givt-overlay>'+state.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</c>';
         if (!state.track.cues.length || state.track.cues[0].text !== safeText) {
           state.hideTrack();
