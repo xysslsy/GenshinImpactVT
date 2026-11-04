@@ -1,0 +1,12 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>Local OCR fixture</title>
+<style>html,body{margin:0;background:#15191e;height:100%;overflow:hidden}video{width:100%;height:100%;object-fit:contain}canvas{display:none}</style>
+<canvas width="960" height="540"></canvas><video muted autoplay playsinline></video>
+<script>
+const c=document.querySelector('canvas'),ctx=c.getContext('2d'),v=document.querySelector('video');
+window.caption='向东前进';window.frames=0;
+setInterval(()=>{ctx.fillStyle='#263b48';ctx.fillRect(0,0,960,540);
+ctx.fillStyle='#6c8996';ctx.fillRect((window.frames++*4)%900,100,60,60);
+ctx.fillStyle='white';ctx.font='bold 38px "Microsoft YaHei"';ctx.textAlign='center';
+ctx.strokeStyle='black';ctx.lineWidth=5;ctx.strokeText(window.caption,480,480);ctx.fillText(window.caption,480,480);},100);
+v.srcObject=c.captureStream(10);v.play();
+</script></html>

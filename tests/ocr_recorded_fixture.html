@@ -1,0 +1,9 @@
+<!doctype html><html><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#111;overflow:hidden}canvas{display:none}video{width:100%;height:100%;object-fit:contain}</style>
+<canvas width="960" height="540"></canvas><video muted playsinline></video>
+<script>
+const c=document.querySelector('canvas'),ctx=c.getContext('2d'),v=document.querySelector('video');let start=performance.now(),frame=0;
+function draw(){let t=(performance.now()-start)/1000;ctx.fillStyle='#263b48';ctx.fillRect(0,0,960,540);ctx.fillStyle='#6c8996';ctx.fillRect((frame++*4)%900,80,60,60);ctx.fillStyle='white';ctx.font='bold 38px "Microsoft YaHei"';ctx.textAlign='center';ctx.fillText(t<1.5?'向东前进':'向北走',480,480);}
+draw();const clock=setInterval(draw,100),stream=c.captureStream(10),chunks=[];const rec=new MediaRecorder(stream);
+rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};rec.onstop=()=>{clearInterval(clock);stream.getTracks().forEach(t=>t.stop());v.src=URL.createObjectURL(new Blob(chunks,{type:rec.mimeType}));v.load();};
+rec.start();setTimeout(()=>rec.stop(),3500);
+</script></html>

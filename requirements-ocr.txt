@@ -1,0 +1,7 @@
+# Optional CPU-only subtitle recognition. No CUDA or game hooks.
+-r requirements.txt
+rapidocr==3.10.0
+onnxruntime==1.23.2
+opencv-python-headless==4.11.0.86
+numpy==2.2.6
+Pillow==11.3.0

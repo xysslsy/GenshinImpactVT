@@ -1,0 +1,13 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>字幕 OCR 本地测试</title>
+<style>body{margin:20px;background:#f7f7f5;color:#282825;font:15px system-ui}button{margin:4px;padding:8px}video{width:100%;max-height:65vh;object-fit:contain;background:#15191e}canvas{display:none}</style>
+<p>本地字幕识别示例：字幕直接画进视频，没有网页字幕轨道。请选择一句话，再到“字幕识别”页开启 OCR。</p>
+<button onclick="caption='向东前进'">向东前进</button><button onclick="caption='往西南方向走'">往西南方向走</button><button onclick="caption='捡起这个东西'">捡起这个东西</button>
+<canvas width="960" height="540"></canvas><video muted autoplay playsinline></video>
+<script>
+const c=document.querySelector('canvas'),ctx=c.getContext('2d'),v=document.querySelector('video');
+window.caption='向东前进';let frame=0;
+setInterval(()=>{ctx.fillStyle='#263b48';ctx.fillRect(0,0,960,540);ctx.fillStyle='#6c8996';ctx.fillRect((frame++*4)%900,100,60,60);
+ctx.fillStyle='white';ctx.font='bold 38px "Microsoft YaHei"';ctx.textAlign='center';ctx.strokeStyle='black';ctx.lineWidth=5;
+ctx.strokeText(caption,480,480);ctx.fillText(caption,480,480);},100);
+v.srcObject=c.captureStream(10);v.play();
+</script></html>
