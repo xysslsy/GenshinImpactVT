@@ -53,6 +53,7 @@ def main():
             else:result['no_direction_cue']=True;timer.stop();finish()
         elif stage==1 and window.compass.active==target:
             result['checks']['native_caption_direction']=True
+            result['checks']['live_footer_caption']=bool(window.subtitle_strip.current) and directions(window.subtitle_strip.current)==target
             s.open_official_player();stage=2
         elif stage==2 and 'player.bilibili.com/' in window.address.text() and feed.timeline.cues and feed.video_key[1]=='32294243227':
             window.browser.execute_script('(()=>{let v=document.querySelector("video");v.pause();v.currentTime='+json.dumps(result['direction_test_time'])+'})()')
@@ -78,7 +79,7 @@ def main():
             timer.stop();finish()
     timer=QTimer();timer.timeout.connect(step);timer.start(200)
     app.exec();ole.OleUninitialize()
-    return 0 if len(result['checks'])==7 and all(result['checks'].values()) else 1
+    return 0 if len(result['checks'])==8 and all(result['checks'].values()) else 1
 
 
 if __name__=='__main__':sys.exit(main())

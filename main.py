@@ -29,12 +29,13 @@ from genshinimpactvt.browser import BrowserHost, DATA, user32
 from genshinimpactvt.storage import Store
 from genshinimpactvt.urls import normalize_url
 from genshinimpactvt.subtitle_strip import SubtitleStrip
+from genshinimpactvt.version import APP_NAME,APP_TITLE,__version__,DISPLAY_VERSION
 
 user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
 STYLE = '''
 QWidget { color:#282825; background:#ffffff; font-family:"Microsoft YaHei UI"; font-size:14px; }
 QWidget#side { background:#f7f7f5; border-right:1px solid #e9e9e5; }
-QLabel#brand { font-size:18px; font-weight:700; padding:12px 8px 22px; background:transparent; }
+QLabel#brand { font-size:14px; font-weight:700; padding:12px 6px 14px; background:transparent; }
 QLabel#heading { font-size:23px; font-weight:700; padding:12px 0; }
 QLabel#muted { color:#777773; font-size:12px; }
 QPushButton { background:#f6f6f4; border:1px solid #e8e8e5; border-radius:7px; padding:8px 12px; }
@@ -55,7 +56,7 @@ def button(label, action, nav=False):
 class Floating(QWidget):
     def __init__(self, main):
         super().__init__(None, Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint)
-        self.main = main; self.setWindowTitle('GenshinImpactVT · 控制')
+        self.main = main; self.setWindowTitle(APP_TITLE+' · 控制')
         layout = QHBoxLayout(self); layout.setContentsMargins(8,8,8,8)
         layout.addWidget(button('←', main.browser.back)); layout.addWidget(button('→', main.browser.forward))
         layout.addWidget(button('刷新', main.browser.reload))
@@ -68,13 +69,13 @@ class Main(QMainWindow):
         super().__init__(); self.data_dir = Path(data_dir); self.data_dir.mkdir(parents=True, exist_ok=True)
         self.settings = QSettings(str(self.data_dir / 'settings.ini'), QSettings.Format.IniFormat)
         self.store = Store(self.data_dir / 'library.sqlite3'); self.current_url = ''
-        self.setWindowTitle('GenshinImpactVT'); self.resize(1200, 760); self.setMinimumSize(760, 500)
+        self.setWindowTitle(APP_TITLE); self.resize(1200, 760); self.setMinimumSize(760, 500)
         self.browser = BrowserHost(); self.browser.ready.connect(lambda: self.status.setText('浏览器已就绪'))
         self.browser.failed.connect(self.error); self.browser.navigated.connect(self.navigated)
         self.browser.source_changed.connect(self.address_changed); self.browser.loading.connect(lambda: self.status.setText('正在加载…'))
         root = QWidget(); self.setCentralWidget(root); outer = QHBoxLayout(root); outer.setContentsMargins(0,0,0,0); outer.setSpacing(0)
         side = QWidget(); side.setObjectName('side'); side.setFixedWidth(190); nav = QVBoxLayout(side); nav.setContentsMargins(14,18,14,18)
-        brand = QLabel('◌  GenshinImpactVT'); brand.setObjectName('brand'); nav.addWidget(brand)
+        brand = QLabel(APP_NAME+'\n'+DISPLAY_VERSION); brand.setObjectName('brand'); nav.addWidget(brand)
         self.stack = QStackedWidget(); self.navbuttons = []
         for title, page in [('浏览器', self.make_browser()), ('收藏', self.make_list('bookmarks')), ('历史记录', self.make_list('history')), ('设置', self.make_settings())]:
             index = self.stack.addWidget(page); b = button(title, lambda checked=False, n=index: self.select(n), True); self.navbuttons.append(b); nav.addWidget(b)
@@ -183,6 +184,7 @@ def main():
     ole = ctypes.OleDLL('ole32'); ole.OleInitialize(None)
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('GenshinImpactVT.Desktop.1')
     app = QApplication(sys.argv[:1]); app.setWindowIcon(QIcon(str(Path(__file__).resolve().parent / 'assets' / 'app.ico')))
+    app.setApplicationName(APP_NAME);app.setApplicationVersion(__version__)
     app.setStyleSheet(STYLE); window = Main(SMOKE_DIR/'app') if SMOKE_DIR is not None and BILI_TEST else Main()
     test_result = {'ready': False, 'navigation': False, 'icon': not app.windowIcon().isNull(), 'errors': []}
     if SMOKE_DIR is not None:
