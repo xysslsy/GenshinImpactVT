@@ -1,17 +1,17 @@
 # GenshinImpactVT
 
-当前版本 **v1.2**（内部版本 1.2.0）。Windows 桌面攻略视频工作台，使用 Python 3.12、PySide6、pythonnet、Microsoft WebView2 WinForms 和 WebView2 Evergreen Runtime，不依赖原版 MaBao。
+当前版本 **v1.3**（内部版本 1.3.0）。Windows 桌面攻略视频工作台，使用 Python 3.12、PySide6、pythonnet、Microsoft WebView2 WinForms 和 WebView2 Evergreen Runtime，不依赖原版 MaBao。
 
 支持 B站 AI/CC 字幕、视频内透明字幕、左下角小窗观看、八向方向氛围光、官方纯播放器、视频快捷控制和本地收藏/历史。查看 [版本记录](CHANGELOG.md)、[本地发行目录](RELEASES.md) 和 [Git 仓库说明](GIT_WORKFLOW.md)。
 
 ## 下载与本机位置
 
-普通用户可从 [v1.2 发布页](https://github.com/xysslsy/GenshinImpactVT/releases/tag/v1.2) 下载并全部解压，双击 `GenshinImpactVT.exe`；也可[直接下载 v1.2 ZIP](https://github.com/xysslsy/GenshinImpactVT/releases/download/v1.2/GenshinImpactVT-v1.2-windows-x64.zip)。
+普通用户可从 [v1.3 发布页](https://github.com/xysslsy/GenshinImpactVT/releases/tag/v1.3) 下载并全部解压，双击 `GenshinImpactVT.exe`；也可[直接下载 v1.3 ZIP](https://github.com/xysslsy/GenshinImpactVT/releases/download/v1.3/GenshinImpactVT-v1.3-windows-x64.zip)。
 
 本机软件文件已集中在 `D:\AINixiang\GenshinImpactVT`：
 
-- 当前版本：`releases\v1.2\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v1.2**。
-- 上一版本：`releases\v1.1\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v1.1**。
+- 当前版本：`releases\v1.3\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v1.3**。
+- 上一版本：`releases\v1.2\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v1.2**。
 - ZIP、校验清单和位置说明位于 `releases\`。日常使用上面两版，更早版本已通过 SHA-256 核对后备份至 [GitHub 历史归档](https://github.com/xysslsy/GenshinImpactVT/releases/tag/binary-archive-20261104)。v0.0～v0.3 本地包已清理；v0.4 目录和旧 `.build` 缓存的删除被自动审批策略拦截，暂保留。
 - 当前文件夹即产品 Git 仓库；源码启动使用下方说明中的 `.venv`。原 Gitee 参考仓库与研究资料仍独立保留。
 
@@ -47,7 +47,7 @@ SDK 脚本从官方 NuGet 下载固定版本并验证 SHA-256；安装过程需�
 ```powershell
 .\.venv\Scripts\python.exe -m PyInstaller --noconfirm --distpath .build/dist --workpath .build/work packaging/GenshinImpactVT-light.spec
 .\.venv\Scripts\python.exe -m PyInstaller --noconfirm --distpath .build/uninstall-dist --workpath .build/uninstall-work packaging/GenshinImpactVT-uninstall.spec
-.\.venv\Scripts\python.exe packaging/prepare_portable.py --dist .build/dist/GenshinImpactVT --helper .build/uninstall-dist/Uninstall.exe --output releases/v1.2
+.\.venv\Scripts\python.exe packaging/prepare_portable.py --dist .build/dist/GenshinImpactVT --helper .build/uninstall-dist/Uninstall.exe --output releases/v1.3
 ```
 
 单独运行主程序的 PyInstaller spec 不包含卸载助手和清单，此时卸载按钮禁用。开发源码同样不提供自删除入口。
@@ -75,7 +75,7 @@ GUI 测试需要交互式桌面，会打开窗口并模拟按键；仅使用临�
    当前字幕直接显示在视频画面底部，透明背景、白字描边，不另占面板，也不挡鼠标操作；可在字幕页关闭 **在视频内显示透明字幕**。关闭识别、切换视频/分 P 和定位时清掉旧句子；暂停时保留当前时间点字幕。若网页自身的字幕同时显示造成重叠，可关闭播放器自己的字幕显示。
 5. 游戏时可点击 **打开官方纯播放器**，使用 B站官方外链播放页，减少完整网页的侧栏和推荐内容；需要完整功能时点击 **返回完整 B站网页**。纯播放器已适配 7/8 切分 P，仍受平台自身画质、访问与播放限制。
 
-方向浮窗默认带圆形柔光：例如“东北”在右上区域显示一团蓝色光晕，“西南”在左下显示，支持八个方向。背景透明，没有圆形边框。短暂淡入后保持，再淡出；新方向立即换位置，快进/空字幕等清理动作立即取消旧光效。可在“设置”中关闭 **方向氛围光**，或调整颜色、强度、浮窗大小。拖动浮窗仍可调整位置。
+方向浮窗默认带圆形柔光：例如“东北”在右上区域显示一团蓝色光晕，“西南”在左下显示，支持八个方向。背景透明，没有圆形边框。淡入后默认保持 5 秒，再用 450 ms 淡出；新方向立即换位置。字幕空隙或不含方向的新句子不会提前清除光效，跳转定位、切换视频和关闭识别仍会立即清除旧提示。可在“设置”中关闭 **方向氛围光**，或调整颜色、强度、浮窗大小以及高亮保持时间（1～30 秒）。拖动浮窗仍可调整位置。
 
 光效直接由 Qt 绘制，不增加模型或网络请求。仅淡入/淡出的短时间内运行动画，保持期间和没有提示时不持续重绘；窗口使用不主动获取键盘焦点的属性。真实游戏前台表现仍需实际试用。
 
@@ -101,11 +101,30 @@ GUI 测试需要交互式桌面，会打开窗口并模拟按键；仅使用临�
 
 双击 `GenshinImpactVT.lnk` 无控制台启动；也可以双击 `launch.vbs`。这些入口每次通过 Windows UAC 请求管理员权限，确认后以 pythonw 启动；取消时不会启动。命令行直接执行 `main.py` 沿用当前终端权限。启动异常会显示错误窗口。
 
-键盘视频快捷键只有 `7` 上一集和 `8` 下一集。侧键负责播放/暂停与快退。默认的普通监听不会拦截 7、8，当前游戏或其他程序也会收到原按键；在其他程序输入 7 或 8 时也可能切换视频，可在设置页关闭此功能。点击浏览器底部 **小窗观看**：切换为 480×300 的左下角窗口，隐藏应用导航、地址和底部栏，可继续缩小到 320×180。使用自动出现的悬浮控制中的 **显示 / 隐藏工具栏** 恢复。透明字幕继续显示；退出后记住精简状态和窗口位置。网页自己的控件和普通窗口标题栏可能仍然存在。HTML 全屏自动隐藏工具栏，退出后恢复此前的精简状态；部分网站的网页内全屏不一定发出该事件。
+v1.3 默认快捷键如下，均可在 **设置 → 自定义快捷键 → 编辑快捷键** 修改。编辑期间暂停键盘和侧键动作，修改后点击 **保存并启用**；支持单键或组合键，留空可禁用动作。重复键会被拒绝，系统保留键不允许使用。设置和侧键映射会在重启后恢复。
 
-设置页可将 `7` / `8` 由普通监听切换为“系统全局热键”：Windows 会将两键注册为全局快捷键，可能使其他程序无法正常输入 7、8，适合需要时临时尝试；切回普通监听、关闭开关或退出软件会释放按键。注册失败时设置页显示提示。该方式不保证在游戏前台可用，也不影响鼠标侧键监听。
+| 动作 | 默认按键 |
+| --- | --- |
+| 播放 / 暂停 | 鼠标侧键上键（XBUTTON2），键盘默认留空 |
+| 快退 5 秒 | 5；鼠标侧键下键（XBUTTON1） |
+| 快进 5 秒 | 6 |
+| 上一集 / 下一集 | 7 / 8 |
+| 显示 / 隐藏悬浮控制条 | F9 |
+| 切换极简模式 | 0 |
+| 显示 / 隐藏主窗口 | 9 |
+| 最大化 / 还原 | F10 |
+| 恢复正常界面 | F11 |
+| 显示 / 隐藏方向浮窗 | F8 |
 
-设置页可开启透明方向文字浮窗、拖动位置并选择高亮颜色。字幕识别页同时支持当前网页字幕和视频硬字幕 OCR，方向字高亮 2.5 秒；规则可能误判，复杂句子仍应以原视频为准。实际 B 站页面字幕结构和分集控件会变化，上一集/下一集不保证在所有视频可用。
+鼠标上、下侧键也可分别指定上表任一动作或禁用。全局快捷键在其他程序前台时也会触发；普通监听同时保留按键的原有功能，打字时也可能触发。可用“启用全局键盘快捷键”和“启用鼠标侧键”分别关闭。系统全局热键模式会占用所设键，注册冲突时显示具体失败项；编辑或退出时释放注册。游戏中的效果依赖权限和实际输入环境，便携版继续使用管理员权限启动。
+
+点击 **小窗观看**：切换为 480×300 左下角窗口，隐藏导航、地址和底部栏，可继续缩到 320×180。控制条不会自动挡住视频；按 **F9** 或单击系统托盘图标显示/收起。控制条的 **收起** 和右上角关闭按钮只隐藏控制条，不退出视频；唤出不主动抢键盘焦点。位置会保存，换屏时限制在可见范围内。
+
+找不到设置时，按 **F11**；也可右键托盘图标选择 **恢复正常界面**，或右键主窗口标题栏选择同名菜单。恢复后展开导航并调整到可用大小。更改过快捷键时以设置为准，托盘和标题栏入口不受快捷键配置影响。关闭主窗口仍会退出整个软件，也可使用托盘“退出软件”。
+
+透明字幕在小窗和网页全屏下继续显示。HTML 全屏自动隐藏工具栏，退出后恢复此前状态；部分网站的网页内全屏不一定发出该事件。普通标题栏和网页自身控件可能仍然存在。
+
+设置页可开启透明方向文字浮窗、拖动位置并选择高亮颜色。字幕识别页同时支持当前网页字幕和视频硬字幕 OCR，方向提示默认保持 5 秒，可在设置中调整到 1～30 秒；规则可能误判，复杂句子仍应以原视频为准。实际 B 站页面字幕结构和分集控件会变化，上一集/下一集不保证在所有视频可用。
 
 浏览器底部“显示方向浮窗”按钮会在主窗口附近显示方向文字，可以拖到游戏小地图处；设置页可以关闭浮窗或修改高亮颜色。鼠标侧键默认启用：上键（Windows XBUTTON2，通常是前进键）播放/暂停，下键（XBUTTON1，通常是后退键）快退 5 秒，可以在设置页关闭。此功能不拦截侧键，当前应用或游戏仍可能同时处理原按键；部分驱动、游戏输入方式或不同权限级别可能影响监听。关闭 GenshinImpactVT 后监听自动移除。
 

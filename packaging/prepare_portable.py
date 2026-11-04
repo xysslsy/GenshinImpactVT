@@ -48,7 +48,7 @@ def main():
         assert archive.testzip() is None
     sha=digest(package)
     record={'version':DISPLAY_VERSION,'file':DISPLAY_VERSION+'/'+package.name,
-            'description':'Same-window navigation and portable uninstall',
+            'description':'Custom shortcuts, recoverable controls and longer direction glow',
             'sha256':sha,'size_bytes':package.stat().st_size,'local_available':True,
             'download_url':f'https://github.com/xysslsy/GenshinImpactVT/releases/download/{DISPLAY_VERSION}/{package.name}'}
     (output/'release-record.json').write_text(json.dumps(record,indent=2),encoding='utf-8')
