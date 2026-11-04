@@ -17,6 +17,7 @@ tmp*/
 .test-episodes/
 .test-system-episodes/
 .build/
+.maintenance/
 .test-ocr/
 .test-bilibili-light/
 .test-glow/

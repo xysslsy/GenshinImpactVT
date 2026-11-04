@@ -1,8 +1,8 @@
 # 产品仓库与提交
 
-当前独立产品源码仓库位于 `mabao/next/`，远端为 `https://github.com/xysslsy/GenshinImpactVT.git`，整理分支为 `release/v1`。它接续已经发布的独立软件历史。
+当前文件夹就是独立产品源码仓库，本机路径为 `D:\AINixiang\GenshinImpactVT`，远端为 `https://github.com/xysslsy/GenshinImpactVT.git`。日常分支为 `main`，`release/v1` 和 `v1` 标签保留发布时快照。
 
-外层 `mabao/` 仍是原 Gitee 参考仓库；它的 remote、原始提交、规划和实验目录保留。日常开发在 `next/` 下执行 Git 命令，避免将参考仓库和产品历史混合。
+平级 `mabao/` 仍是原 Gitee 参考仓库；其 remote、原始提交、规划和实验源文件保留。产品源码已从原 `mabao/next/` 搬出，日常在当前文件夹执行 Git 命令。
 
 本次新增提交按功能分组：
 
@@ -13,6 +13,6 @@
 5. 字幕设置、宿主适配、底部实时字幕及集成验证。
 6. v1 版本元数据、构建、发行记录和说明。
 
-提交保留真实时间，不变基已有公开历史；公开的 `v0.1.0` 不改写。历史二进制版本编号见 [RELEASES.md](RELEASES.md)。v1 标签在当前检查完成后创建；本次只整理本地提交，推送和发布另行进行。
+提交保留真实时间，不变基已有公开历史；公开的 `v0.1.0` 不改写。历史二进制版本编号见 [RELEASES.md](RELEASES.md)。六个模块提交、v1 标签和发行包已上传；历史安装包按服务端 SHA-256 核对完成后，本地仅保留 v1、v0.4。
 
-`.build/`、依赖、临时浏览器资料、数据库、用户快捷方式和 ZIP/EXE 不进 Git。发行文件在工作区外层 `releases/`，使用 SHA-256 清单核对。
+`.build/`、`.maintenance/`、`.venv/`、依赖、临时浏览器资料、数据库、用户快捷方式和 ZIP/EXE 不进 Git。发行文件位于本文件夹内的 `releases/`，仅保留 v1、v0.4。旧测试临时资料已清理，开发依赖在 `.venv/` 中按 `requirements.txt` 重建；本机 `.build/` 临时构建缓存仍保留，与正式发行目录分开。

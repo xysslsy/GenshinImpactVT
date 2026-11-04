@@ -4,6 +4,17 @@
 
 支持 B站 AI/CC 字幕、浏览器底部实时字幕、八向方向氛围光、官方纯播放器、视频快捷控制和本地收藏/历史。查看 [版本记录](CHANGELOG.md)、[本地发行目录](RELEASES.md) 和 [Git 仓库说明](GIT_WORKFLOW.md)。
 
+## 下载与本机位置
+
+普通用户可从 [v1 发布页](https://github.com/xysslsy/GenshinImpactVT/releases/tag/v1) 下载并全部解压，双击 `GenshinImpactVT.exe`；也可[直接下载 v1 ZIP](https://github.com/xysslsy/GenshinImpactVT/releases/download/v1/GenshinImpactVT-v1-windows-x64.zip)。
+
+本机软件文件已集中在 `D:\AINixiang\GenshinImpactVT`：
+
+- 当前版本：`releases\v1\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v1**。
+- 上一版本：`releases\v0.4\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v0.4**。
+- ZIP、校验清单和位置说明位于 `releases\`。本地仅保留这两版，旧版已通过 SHA-256 核对后备份至 [GitHub 历史归档](https://github.com/xysslsy/GenshinImpactVT/releases/tag/binary-archive-20261104)。
+- 当前文件夹即产品 Git 仓库；源码启动使用下方说明中的 `.venv`。原 Gitee 参考仓库与研究资料仍独立保留。
+
 ## 环境和启动
 
 需要 Windows x64、Python 3.12 x64、.NET Framework 4.8 和 [WebView2 Evergreen Runtime](https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution)。在 PowerShell 中进入本目录：
@@ -22,6 +33,8 @@ py -3.12 -m venv .venv
 ```
 
 SDK 脚本从官方 NuGet 下载固定版本并验证 SHA-256；安装过程需要网络。首次启动打开自带的本地合成视频页面，可输入 HTTP(S) 地址浏览。Evergreen Runtime 或 SDK 缺失时，浏览器底部状态栏显示原因。
+
+需要重新打包轻量版时，先安装 `requirements-dev.txt`，再运行 `python -m PyInstaller --noconfirm --distpath .build/dist --workpath .build/work packaging/GenshinImpactVT-light.spec`。`.build` 是可重建的临时目录，正式保留包仍位于 `releases/v1` 和 `releases/v0.4`。
 
 收藏和历史保存在 `%LOCALAPPDATA%\MaBaoNext\library.sqlite3`；应用设置在同目录 `settings.ini`，浏览器数据在 `browser-profile`。历史包含访问过的完整 URL；浏览器数据与收藏、历史分开保存。点击侧栏可浏览收藏和历史，双击打开、选择后删除。悬浮控制可前进、后退、刷新、设置置顶和恢复主窗口。正常退出后恢复窗口配置及上次网页。
 

@@ -1,4 +1,8 @@
-"""Normalize existing local release snapshots without rewriting old binaries."""
+"""One-time import of the old workspace layout without rewriting binaries.
+
+The organized layout keeps only v1 and v0.4 locally; older snapshots are on
+GitHub Releases. This importer is retained for provenance, not daily cleanup.
+"""
 import argparse
 import hashlib
 import json
