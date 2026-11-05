@@ -1,17 +1,17 @@
 # GenshinImpactVT
 
-当前版本 **v1.3**（内部版本 1.3.0）。Windows 桌面攻略视频工作台，使用 Python 3.12、PySide6、pythonnet、Microsoft WebView2 WinForms 和 WebView2 Evergreen Runtime，不依赖原版 MaBao。
+当前版本 **v1.3.1**（内部版本 1.3.1）。Windows 桌面攻略视频工作台，使用 Python 3.12、PySide6、pythonnet、Microsoft WebView2 WinForms 和 WebView2 Evergreen Runtime，不依赖原版 MaBao。
 
 支持 B站 AI/CC 字幕、视频内透明字幕、左下角小窗观看、八向方向氛围光、官方纯播放器、视频快捷控制和本地收藏/历史。查看 [版本记录](CHANGELOG.md)、[本地发行目录](RELEASES.md) 和 [Git 仓库说明](GIT_WORKFLOW.md)。
 
 ## 下载与本机位置
 
-普通用户可从 [v1.3 发布页](https://github.com/xysslsy/GenshinImpactVT/releases/tag/v1.3) 下载并全部解压，双击 `GenshinImpactVT.exe`；也可[直接下载 v1.3 ZIP](https://github.com/xysslsy/GenshinImpactVT/releases/download/v1.3/GenshinImpactVT-v1.3-windows-x64.zip)。
+普通用户可从 [v1.3.1 发布页](https://github.com/xysslsy/GenshinImpactVT/releases/tag/v1.3.1) 下载并全部解压，双击 `GenshinImpactVT.exe`；也可[直接下载 v1.3.1 ZIP](https://github.com/xysslsy/GenshinImpactVT/releases/download/v1.3.1/GenshinImpactVT-v1.3.1-windows-x64.zip)。
 
 本机软件文件已集中在 `D:\AINixiang\GenshinImpactVT`：
 
-- 当前版本：`releases\v1.3\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v1.3**。
-- 本机发行目录仅保留 **v1.3**。2026-11-05 已将其余本地版本、旧构建缓存和旧桌面快捷方式移入回收站，可恢复；历史发行包仍可从 [GitHub Releases](https://github.com/xysslsy/GenshinImpactVT/releases) 下载。ZIP、校验清单和位置说明位于 `releases\`。
+- 当前版本：`releases\v1.3.1\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v1.3.1**。
+- 当前修复版为 **v1.3.1**。旧 v1.3 正在运行，目录暂保留；请关闭旧程序后使用新版入口。其他历史本地版本已移入回收站，可恢复；历史发行包仍可从 [GitHub Releases](https://github.com/xysslsy/GenshinImpactVT/releases) 下载。ZIP、校验清单和位置说明位于 `releases\`。
 - 当前文件夹即产品 Git 仓库；源码启动使用下方说明中的 `.venv`。原 Gitee 参考仓库与研究资料仍独立保留。
 
 ## 同页浏览和卸载
@@ -46,7 +46,7 @@ SDK 脚本从官方 NuGet 下载固定版本并验证 SHA-256；安装过程需�
 ```powershell
 .\.venv\Scripts\python.exe -m PyInstaller --noconfirm --distpath .build/dist --workpath .build/work packaging/GenshinImpactVT-light.spec
 .\.venv\Scripts\python.exe -m PyInstaller --noconfirm --distpath .build/uninstall-dist --workpath .build/uninstall-work packaging/GenshinImpactVT-uninstall.spec
-.\.venv\Scripts\python.exe packaging/prepare_portable.py --dist .build/dist/GenshinImpactVT --helper .build/uninstall-dist/Uninstall.exe --output releases/v1.3
+.\.venv\Scripts\python.exe packaging/prepare_portable.py --dist .build/dist/GenshinImpactVT --helper .build/uninstall-dist/Uninstall.exe --output releases/v1.3.1
 ```
 
 单独运行主程序的 PyInstaller spec 不包含卸载助手和清单，此时卸载按钮禁用。开发源码同样不提供自删除入口。
@@ -68,7 +68,7 @@ GUI 测试需要交互式桌面，会打开窗口并模拟按键；仅使用临�
 ## 字幕识别与方向提醒
 
 1. 打开攻略视频，在软件自带的网页里正常登录 B站。B站会对部分 AI 字幕要求登录；无需向本工具提交或导出密码、Cookie。
-2. 点击左侧 **字幕识别**，开启功能，保持 **轻量：B站平台字幕 + 网页字幕**。点击 **刷新字幕（登录后点击）**，正常刷新视频后自动检测平台提供的字幕。
+2. 点击左侧 **字幕识别**，开启功能，保持 **轻量：B站平台字幕 + 网页字幕**。开启后会主动读取当前视频字幕，切视频/分 P 自动重新匹配。失败时有限次退避重试，无须刷新整个视频；手动 **重试字幕（不刷新视频）** 会重置重试次数。
 3. 状态显示“已载入 N 条字幕，无本地推理”后，按视频时间读取字幕，并高亮方向。网页当前已显示的字幕也可以直接读取；无需开启 OCR。支持正常快进、回退和多分 P 字幕切换。
 4. 点击 **显示方向浮窗**，拖动调整位置；高亮颜色在“设置”页修改。**最近识别文字** 用于检查当前字幕。
    当前字幕直接显示在视频画面底部，透明背景、白字描边，不另占面板，也不挡鼠标操作；可在字幕页关闭 **在视频内显示透明字幕**。关闭识别、切换视频/分 P 和定位时清掉旧句子；暂停时保留当前时间点字幕。若网页自身的字幕同时显示造成重叠，可关闭播放器自己的字幕显示。
@@ -78,7 +78,7 @@ GUI 测试需要交互式桌面，会打开窗口并模拟按键；仅使用临�
 
 光效直接由 Qt 绘制，不增加模型或网络请求。仅淡入/淡出的短时间内运行动画，保持期间和没有提示时不持续重绘；窗口使用不主动获取键盘焦点的属性。真实游戏前台表现仍需实际试用。
 
-已在提供的视频 `https://www.bilibili.com/video/BV1CMHQzsEJV/?p=3` 上用软件正常登录会话验证：平台提供 `ai-zh` 中文轨，载入 287 条字幕，按方向时间点跳转后浮窗响应；未启动 OCR，也未加载 RapidOCR、ONNX Runtime、OpenCV、NumPy。
+v1.3.1 已验证延迟开启识别、首次请求失败后的自动重试、p=3→4→3 和纯播放器均可自动读取；手动重试保留视频实例和时间位置。被动捕获与主动补读均校验返回 CID/BVID，迟到的旧分 P 不会覆盖当前字幕。已在提供的视频 `https://www.bilibili.com/video/BV1CMHQzsEJV/?p=3` 上用软件正常登录会话验证：平台提供 `ai-zh` 中文轨，载入 287 条字幕，按方向时间点跳转后浮窗响应；未启动 OCR，也未加载 RapidOCR、ONNX Runtime、OpenCV、NumPy。
 
 这条路线只复用 B站已提供且当前会话有权访问的字幕。它不能强制平台为每一个没有字幕的视频生成字幕；未登录、没有字幕、网络失败分别提示，不会自动启动本地语音识别。字幕响应和时间轴仅保存在内存，不导出账号信息，不向其他服务上传音频。
 

@@ -38,3 +38,12 @@ python -B tests/bilibili_native_smoke.py
 尺寸变化由 ResizeObserver、窗口 resize/scroll 和 fullscreenchange 事件触发，没有常驻重绘循环；空字幕移除显示节点、取消待绘制帧并断开视频尺寸观察。仅支持当前顶层文档中的视频，未实现跨域 iframe 内的叠层；当前 B站完整页与官方纯播放器均在该范围内。
 
 `tests/subtitle_overlay_smoke.py` 使用本地视频和隔离 profile 验证透明渲染、纯文本、布局跟随、小窗、两种全屏、隐藏和清空。全屏测试使用 WebView2 的 [CallDevToolsProtocolMethodAsync](https://learn.microsoft.com/dotnet/api/microsoft.web.webview2.core.corewebview2.calldevtoolsprotocolmethodasync) 给本地页面测试调用提供手势；产品不开放调试端口，也不用该调用处理字幕。
+
+
+## v1.3.1 自动恢复
+
+被动响应可能早于用户开启识别，也可能在切分 P 时丢失。现在按当前 URL 的 BVID 和 p 主动补读：在 WebView2 页面内正常访问 `/x/web-interface/view` 获取对应 CID，优先复用播放器已经发出的、BVID/aid 和 CID 匹配的 `/x/player/wbi/v2` 请求；缺失或失效时使用携带 aid、CID 的普通 `/x/player/v2`，再读取允许的 HTTPS CDN 字幕。仅回放现成请求，不生成或修改签名。接口在当前会话中请求，不导出 Cookie、生成签名或调用字幕生成服务；仍受正常登录和平台权限约束。这些是网页内部接口，不是稳定公开 SDK。
+
+页面异步请求使用 AbortController 和 18 秒整体期限，原生侧异步读取结果，22 秒后放弃卡住任务。每个视频最多四次恢复尝试，失败间隔为 2、5、12 秒；成功或次数耗尽后停止恢复计时器。手动重试重新计数，不刷新网页。每个响应最多 4 MiB，字幕解析最多 30,000 行；过滤非允许的字幕地址，仅读取一次时间轴。关闭识别/换页会中止旧恢复任务，不上传字幕和音频。
+
+BVID、CID、分 P 与当前 URL 对齐；返回身份不一致时拒绝。启用前错过响应、请求偶发失败、旧分 P 延迟回包都有测试。字幕内容和临时响应只存在内存。WebView2 执行脚本与 JSON 返回方式参考 [Microsoft 官方说明](https://learn.microsoft.com/en-us/microsoft-edge/webview2/how-to/javascript)。

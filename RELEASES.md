@@ -1,6 +1,6 @@
 # 发行文件
 
-当前版本 **v1.3**，本机发行目录仅保留此版。文件位于 `releases/`（不进入 Git 源码提交）。
+当前修复版 **v1.3.1**。旧 v1.3 进程仍在运行，其目录暂留；退出旧程序后请使用 v1.3.1。文件位于 `releases/`（不进入 Git 源码提交）。
 
 2026-11-05 核对 GitHub 备份及 SHA-256 后，将本地 v0.4、v1、v1.1、v1.2、旧 `.build` 构建缓存和旧桌面快捷方式移入 Windows 回收站。可从回收站恢复，云端历史发行包继续保留。
 
@@ -15,9 +15,10 @@
 | v1.1 | cloud only | [GitHub](https://github.com/xysslsy/GenshinImpactVT/releases/download/v1.1/GenshinImpactVT-v1.1-windows-x64.zip) | `6736fa1d882f511df911d3abc39cb5c658e6473ab87b1c12a818a9863bfe0dc1` |
 | v1.2 | cloud only | [GitHub](https://github.com/xysslsy/GenshinImpactVT/releases/download/v1.2/GenshinImpactVT-v1.2-windows-x64.zip) | `3c117a2ffbc558a42431ffcf5721e0581d80d32a90a96471ee23bf272de54338` |
 | v1.3 | yes | [GitHub](https://github.com/xysslsy/GenshinImpactVT/releases/download/v1.3/GenshinImpactVT-v1.3-windows-x64.zip) | `2645d3f29bf1331f720e61389ffb97d94a4a66ccd09b2a061095352956506673` |
+| v1.3.1 | yes | [GitHub](https://github.com/xysslsy/GenshinImpactVT/releases/download/v1.3.1/GenshinImpactVT-v1.3.1-windows-x64.zip) | `a36482edda036af3e30544a11d7ed6bee4b34a0588d0f7e189f94fbf3d130fdf` |
 
-当前程序：`releases/v1.3/GenshinImpactVT/GenshinImpactVT.exe`。
+当前程序：`releases/v1.3.1/GenshinImpactVT/GenshinImpactVT.exe`。
 
-桌面仅保留 **GenshinImpactVT v1.3** 快捷方式。
+桌面仅保留 **GenshinImpactVT v1.3.1** 快捷方式。
 
-当前版卸载入口：设置页的“卸载此版本”，或 `releases/v1.3/GenshinImpactVT/Uninstall.exe`。卸载清单和助手从 v1.2 起提供。
+当前版卸载入口：设置页的“卸载此版本”，或 `releases/v1.3.1/GenshinImpactVT/Uninstall.exe`。卸载清单和助手从 v1.2 起提供。
