@@ -11,8 +11,7 @@
 本机软件文件已集中在 `D:\AINixiang\GenshinImpactVT`：
 
 - 当前版本：`releases\v1.3\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v1.3**。
-- 上一版本：`releases\v1.2\GenshinImpactVT\GenshinImpactVT.exe`，桌面快捷方式 **GenshinImpactVT v1.2**。
-- ZIP、校验清单和位置说明位于 `releases\`。日常使用上面两版，更早版本已通过 SHA-256 核对后备份至 [GitHub 历史归档](https://github.com/xysslsy/GenshinImpactVT/releases/tag/binary-archive-20261104)。v0.0～v0.3 本地包已清理；v0.4 目录和旧 `.build` 缓存的删除被自动审批策略拦截，暂保留。
+- 本机发行目录仅保留 **v1.3**。2026-11-05 已将其余本地版本、旧构建缓存和旧桌面快捷方式移入回收站，可恢复；历史发行包仍可从 [GitHub Releases](https://github.com/xysslsy/GenshinImpactVT/releases) 下载。ZIP、校验清单和位置说明位于 `releases\`。
 - 当前文件夹即产品 Git 仓库；源码启动使用下方说明中的 `.venv`。原 Gitee 参考仓库与研究资料仍独立保留。
 
 ## 同页浏览和卸载
