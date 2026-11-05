@@ -7,7 +7,7 @@ root=Path(SPECPATH).parent
 version_file=runpy.run_path(str(root/'packaging'/'version_info.py'))['write_version_info'](root)
 flavor=root/'.build'/'light-flavor';flavor.mkdir(parents=True,exist_ok=True)
 (flavor/'lightweight.flag').write_text('Bilibili timed captions; no local inference\n',encoding='utf-8')
-datas=[(str(root/'fixture.html'),'.'),(str(root/'assets'),'assets'),
+datas=[(str(root/'fixture.html'),'.'),(str(root/'genshinimpactvt'/'caption_recovery.js'),'genshinimpactvt'),(str(root/'assets'),'assets'),
        (str(root/'.deps'/'webview2'),'.deps/webview2'),(str(flavor/'lightweight.flag'),'assets')]
 binaries,hiddenimports=[],[]
 for package in ('pythonnet','clr_loader'):

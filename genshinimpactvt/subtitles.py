@@ -34,7 +34,7 @@ PAGE_SCRIPT = r'''(()=>{
  }
  return {id:location.href+'|'+v.__givtId+'|'+v.currentSrc,epoch:v.__givtEpoch,time:v.currentTime,paused:v.paused,
  seeking:v.seeking,ended:v.ended,ready:v.readyState,text:cues.join(' ').slice(0,500),
- bili:{bvid:state.bvid||state.videoData?.bvid||params.get('bvid'),cid:state.cid||state.videoData?.cid||params.get('cid')},
+ bili:(()=>{const bvid=location.pathname.match(/\/video\/(BV[0-9A-Za-z]{10})(?:\/|$)/)?.[1]||params.get('bvid')||state.bvid||state.videoData?.bvid;const p=Number(params.get('p')||1);const same=(state.bvid||state.videoData?.bvid)===bvid;const part=same?(state.videoData?.pages||state.pages||[]).find(x=>Number(x.page)===p):null;return {bvid,cid:params.get('cid')||part?.cid||(same?(state.cid||state.videoData?.cid):null)}})(),
  rect:[x,y,w,h],viewport:[innerWidth,innerHeight]};
 })()'''
 TIMING_SCRIPT = PAGE_SCRIPT.replace('const timingOnly=false;','const timingOnly=true;')
@@ -155,8 +155,8 @@ class SubtitleController(QObject):
         self.timer.start()
 
     def refresh_subtitles(self):
-        self.native_feed.reset()
-        self.reset_timeline(); self.browser.reload()
+        self.reset_timeline();self.native_feed.refresh()
+        self.page.status.setText(self.native_feed.message)
 
     def open_official_player(self):
         key=self.native_feed.video_key
@@ -243,7 +243,9 @@ class SubtitleController(QObject):
     def read_page(self, now):
         if self._page_task is not None:
             if not self._page_task.IsCompleted:
-                if now-self._page_started > 8: self.page.status.setText('网页响应超时，请刷新页面')
+                if now-self._page_started > 8:
+                    self._page_task=None
+                    self.page.status.setText('网页响应超时，正在重新读取视频状态')
                 return
             task,self._page_task = self._page_task,None
             try:

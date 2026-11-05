@@ -83,7 +83,7 @@ class SubtitlePage(QWidget):
         row = QHBoxLayout()
         self.pick = QPushButton('框选字幕区域'); self.reset = QPushButton('恢复默认区域'); self.show_compass = QPushButton('显示方向浮窗')
         row.addWidget(self.pick); row.addWidget(self.reset); row.addWidget(self.show_compass); box.addLayout(row)
-        self.refresh = QPushButton('刷新字幕（登录后点击）'); box.addWidget(self.refresh)
+        self.refresh = QPushButton('重试字幕（不刷新视频）'); box.addWidget(self.refresh)
         player_row=QHBoxLayout()
         self.player=QPushButton('打开官方纯播放器');self.full_page=QPushButton('返回完整 B站网页')
         player_row.addWidget(self.player);player_row.addWidget(self.full_page);box.addLayout(player_row)

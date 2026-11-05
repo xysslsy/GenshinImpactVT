@@ -84,6 +84,12 @@ class ControllerTests(unittest.TestCase):
         service.reset_timeline()
         self.assertFalse(service.compass.active)
 
+    def test_timed_out_page_task_does_not_block_future_reads(self):
+        service=self.service
+        service._page_task=SimpleNamespace(IsCompleted=False);service._page_started=0
+        service.read_page(10)
+        self.assertIsNone(service._page_task)
+
     def test_region_and_mode_survive_restart(self):
         service=self.service;service.region=(.1,.6,.8,.3);service.save_region()
         service.page.mode.setCurrentIndex(service.page.mode.findData('ocr'))
