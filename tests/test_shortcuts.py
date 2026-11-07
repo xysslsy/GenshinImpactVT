@@ -76,5 +76,15 @@ class ShortcutTests(unittest.TestCase):
                 manager.stop();restored.stop()
             manager.page.close();restored.page.close();main.close()
 
+    def test_upgrade_keeps_user_binding_over_new_default(self):
+        with tempfile.TemporaryDirectory() as temp:
+            main=QWidget();main.settings=QSettings(str(Path(temp)/'s.ini'),QSettings.Format.IniFormat)
+            main.settings.setValue('shortcuts/pause','F2')
+            manager=Shortcuts(main)
+            self.assertEqual(manager.values['pause'],'F2')
+            self.assertEqual(manager.values['opacity_down'],'')
+            self.assertEqual(manager.values['opacity_up'],'F3')
+            manager.page.close();manager.stop();main.close()
+
 
 if __name__=='__main__': unittest.main()

@@ -1,20 +1,41 @@
-"""Transparent eight-way ambient direction cue, rendered only when needed."""
+"""Transparent eight-way rim highlight, rendered only when needed."""
 import math
 from .subtitle_text import directions
 from PySide6.QtCore import Qt, QPointF, QTimer, QVariantAnimation, QEasingCurve
-from PySide6.QtGui import QColor, QFont, QPainter, QRadialGradient
+from PySide6.QtGui import QColor, QFont, QPainter, QRadialGradient, QConicalGradient, QImage
 from PySide6.QtWidgets import QWidget
 
 
 def ambient_position(active, width, height):
-    """One diagonal light, not two cardinal lights. Conflicts produce no light."""
+    """An anchor on the indicated rim sector. Conflicts produce no light."""
     if {'东','西'} <= active or {'南','北'} <= active:
         return None
     x = int('东' in active)-int('西' in active)
     y = int('南' in active)-int('北' in active)
     if not (x or y): return None
     length=math.hypot(x,y);side=min(width,height)
-    return width/2+x/length*side*.27, height/2+y/length*side*.27, side*.22
+    return width/2+x/length*side*.41, height/2+y/length*side*.41, side*.16
+
+
+def rim_highlight(active,width,height,color,strength):
+    image=QImage(width,height,QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    anchor=ambient_position(active,width,height)
+    if anchor is None:return image
+    center=QPointF(width/2,height/2);radius=min(width,height)*.48
+    angle=math.degrees(math.atan2(center.y()-anchor[1],anchor[0]-center.x()))
+    radial=QRadialGradient(center,radius)
+    for stop,alpha in ((0.,0),(.58,0),(.70,65),(.84,190),(.94,165),(1.,0)):
+        tint=QColor(color);tint.setAlpha(round(alpha*strength));radial.setColorAt(stop,tint)
+    painter=QPainter(image);painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.fillRect(image.rect(),radial)
+    # Angular feathering gives a region of the circumference, rather than a point light.
+    angular=QConicalGradient(center,angle-180)
+    for stop,alpha in ((0.,0),(.5-42/360,0),(.5-28/360,150),(.5,255),(.5+28/360,150),(.5+42/360,0),(1.,0)):
+        angular.setColorAt(stop,QColor(255,255,255,alpha))
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+    painter.fillRect(image.rect(),angular);painter.end()
+    return image
 
 
 class Compass(QWidget):
@@ -30,6 +51,7 @@ class Compass(QWidget):
         self.active = set()
         self._drag = None
         self._opacity=0.;self._phase='off'
+        self._glow_cache_key=None;self._glow_image=None
         self.animation=QVariantAnimation(self)
         self.animation.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.animation.valueChanged.connect(self._animate_opacity)
@@ -100,14 +122,12 @@ class Compass(QWidget):
         painter = QPainter(self); painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         glow=ambient_position(self.active,self.width(),self.height())
         if self.glow_enabled and glow and self._opacity>0:
-            x,y,radius=glow
-            gradient=QRadialGradient(QPointF(x,y),radius)
-            for stop,alpha in ((0.,205),(.22,170),(.52,90),(.78,24),(1.,0)):
-                color=QColor(self.color);color.setAlpha(round(alpha*self.strength))
-                gradient.setColorAt(stop,color)
+            key=(tuple(sorted(self.active)),self.width(),self.height(),self.color.rgba(),self.strength)
+            if key!=self._glow_cache_key:
+                self._glow_image=rim_highlight(self.active,self.width(),self.height(),self.color,self.strength)
+                self._glow_cache_key=key
             painter.save();painter.setOpacity(self._opacity)
-            painter.setPen(Qt.PenStyle.NoPen);painter.setBrush(gradient)
-            painter.drawEllipse(QPointF(x,y),radius,radius);painter.restore()
+            painter.drawImage(0,0,self._glow_image);painter.restore()
         font = QFont('Microsoft YaHei UI', 16, QFont.Weight.Bold); painter.setFont(font)
         w, h = self.width(), self.height()
         for label, rect in [('北', (w//2-20, 4, 40, 32)), ('南', (w//2-20, h-36, 40, 32)),

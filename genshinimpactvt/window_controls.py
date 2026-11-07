@@ -18,6 +18,7 @@ class WindowControls(QObject):
         self.toggle_action = self.menu.addAction('显示 / 隐藏悬浮控制条', self.toggle)
         self.menu.addAction('显示主窗口', main.restore_main)
         self.restore_action = self.menu.addAction('恢复正常界面', main.restore_normal)
+        self.menu.addAction('恢复完全不透明',lambda:main.media_action('opacity_reset'))
         self.menu.addSeparator(); self.menu.addAction('退出软件', main.close)
         icon = QApplication.windowIcon()
         if icon.isNull(): icon = QIcon(str(Path(__file__).resolve().parents[1]/'assets/app.ico'))

@@ -13,6 +13,7 @@ from .mouse_buttons import SideButtons
 from .raw_mouse import RawMouse
 from .shortcuts import Shortcuts
 from .window_controls import WindowControls
+from .window_opacity import WindowOpacity
 from .subtitles import SubtitleController
 from .bilibili_subtitles import official_episode_url
 
@@ -45,13 +46,24 @@ def install(cls):
         self.episode_mode.currentIndexChanged.connect(self.change_episode_mode)
         episode_toggle.toggled.connect(self.set_episode_keys)
         self.shortcuts.start()
+        self.window_opacity=WindowOpacity(self)
+        self.opacity_label=QLabel(f'窗口不透明度：{self.window_opacity.percent}%')
+        box.insertWidget(box.count()-1,self.opacity_label)
+        self.opacity_slider=QSlider(Qt.Orientation.Horizontal);self.opacity_slider.setRange(20,100)
+        self.opacity_slider.setValue(self.window_opacity.percent)
+        self.opacity_slider.valueChanged.connect(self.window_opacity.set_percent)
+        box.insertWidget(box.count()-1,self.opacity_slider)
+        def opacity_changed(value):
+            self.opacity_slider.blockSignals(True);self.opacity_slider.setValue(value);self.opacity_slider.blockSignals(False)
+            self.opacity_label.setText(f'窗口不透明度：{value}%（默认 F2 更透明 / F3 更不透明 / F4 还原，可自定义）')
+        self.window_opacity.changed.connect(opacity_changed)
         toggle = QCheckBox('启用字幕方向浮窗（拖动文字调整位置）'); self.compass_toggle = toggle; toggle.setChecked(self.settings.value('compass/enabled', False, type=bool)); toggle.toggled.connect(self.set_compass); box.insertWidget(box.count()-1, toggle)
         color_button = QPushButton('选择方向高亮颜色'); color_button.clicked.connect(self.choose_compass_color); box.insertWidget(box.count()-1, color_button)
-        ambient=QCheckBox('方向氛围光（东北等斜向只亮对应区域）')
+        ambient=QCheckBox('圆周边缘高亮（东北等斜向只亮对应弧带）')
         ambient.setChecked(self.settings.value('compass/glow_enabled',True,type=bool))
         self.compass.set_glow_enabled(ambient.isChecked());box.insertWidget(box.count()-1,ambient)
         ambient.toggled.connect(lambda value:(self.compass.set_glow_enabled(value),self.settings.setValue('compass/glow_enabled',value)))
-        glow_note=QLabel('圆形柔光短暂亮起后淡出，背景透明；可拖动整个方向浮窗对准小地图。')
+        glow_note=QLabel('在对应方位的圆周边缘显示柔和高亮带，中心透明；拖动和缩放方向浮窗，使圆周对准游戏小地图。')
         glow_note.setWordWrap(True);box.insertWidget(box.count()-1,glow_note)
         box.insertWidget(box.count()-1,QLabel('氛围光强度'))
         self.glow_strength=QSlider(Qt.Orientation.Horizontal);self.glow_strength.setRange(15,100)
@@ -216,6 +228,9 @@ def install(cls):
             self.compass.color = color; self.compass.update(); self.settings.setValue('compass/color', color.name())
 
     def media_action(self, action):
+        if action=='opacity_down':self.window_opacity.step(-10);return
+        if action=='opacity_up':self.window_opacity.step(10);return
+        if action=='opacity_reset':self.window_opacity.set_percent(100);return
         if action == 'controls': self.toggle_floating(); return
         if action == 'restore': self.restore_normal(); return
         if action == 'compass':

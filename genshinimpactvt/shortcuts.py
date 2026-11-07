@@ -17,6 +17,9 @@ ACTIONS = {
     'immersive': ('切换极简模式', '0'), 'visible': ('显示 / 隐藏主窗口', '9'),
     'maximize': ('最大化 / 还原', 'F10'), 'restore': ('恢复正常界面', 'F11'),
     'compass': ('显示 / 隐藏方向浮窗', 'F8'),
+    'opacity_down': ('更透明（不透明度降低 10%）', 'F2'),
+    'opacity_up': ('更不透明（不透明度提高 10%）', 'F3'),
+    'opacity_reset': ('恢复完全不透明', 'F4'),
 }
 
 
@@ -194,6 +197,19 @@ class Shortcuts(QObject):
     def __init__(self, main):
         super().__init__(main); self.main = main; self.settings = main.settings; self.suspended = False
         self.values = {key:self.settings.value('shortcuts/'+key,default) for key,(_,default) in ACTIONS.items()}
+        # Existing user bindings win over defaults introduced by a later release.
+        reserved=set()
+        for key,value in self.values.items():
+            if self.settings.contains('shortcuts/'+key):
+                try:
+                    binding=parse_binding(value)
+                    if binding:reserved.add((binding.modifiers,binding.vk))
+                except ValueError:pass
+        for key,(_,default) in ACTIONS.items():
+            if self.settings.contains('shortcuts/'+key):continue
+            binding=parse_binding(default)
+            if binding and (binding.modifiers,binding.vk) in reserved:self.values[key]=''
+            elif binding:reserved.add((binding.modifiers,binding.vk))
         try: self.bindings = validate_bindings(self.values)
         except ValueError:
             self.values = {key:default for key,(_,default) in ACTIONS.items()}; self.bindings = validate_bindings(self.values)
