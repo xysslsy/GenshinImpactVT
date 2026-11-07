@@ -1,11 +1,17 @@
 /* Read normal platform captions using this WebView's session. No credential export. */
 (() => {
-  const token = TOKEN;
+  const token = TOKEN, expected=EXPECTED;
+  const snapshot=MEDIA_CONTEXT, initial=snapshot();
+  const logical=()=>{const u=new URL(location.href);return [u.pathname.match(/\/video\/(BV[0-9A-Za-z]{10})(?:\/|$)/)?.[1]||u.searchParams.get('bvid'),Math.max(1,Number(u.searchParams.get('p')||1)),u.hostname==='player.bilibili.com'?(u.searchParams.get('cid')||''):''];};
+  const context=()=>{const m=snapshot();return m?{document:m.document,media:m.media,src:m.src,player_cid:m.playerCid}:null;};
+  const initialContext=context();
+  const stillCurrent=()=>JSON.stringify(logical())===JSON.stringify(expected)&&JSON.stringify(context())===JSON.stringify(initialContext);
+  const finish=(status,extra={})=>({status,token,context:initialContext,...extra});
   const previous = window.__givtCaptionRecovery;
   if (previous && previous.abort) previous.abort.abort();
   const state = {token, done:false, result:null, abort:new AbortController()};
   window.__givtCaptionRecovery = state;
-  const timer = setTimeout(() => state.abort.abort(), 18000);
+  const timer = setTimeout(() => state.abort.abort(), 20000);
   const limit = 4 * 1024 * 1024;
   const safeCaption = value => {
     const u = new URL(value, location.href);
@@ -33,13 +39,15 @@
   };
   (async () => {
     try {
+      if(!initial||initial.ready<2||!initial.src||!stillCurrent()){state.result=finish('waiting');return;}
       const url = new URL(location.href);
       if (url.protocol !== 'https:' || !(url.hostname === 'bilibili.com' || url.hostname.endsWith('.bilibili.com'))) throw new Error('page');
       const bvid = url.pathname.match(/\/video\/(BV[0-9A-Za-z]{10})(?:\/|$)/)?.[1] || url.searchParams.get('bvid');
       if (!/^BV[0-9A-Za-z]{10}$/.test(bvid || '')) throw new Error('page');
       const page = Math.max(1,Number(url.searchParams.get('p') || 1));
       const view = await read('https://api.bilibili.com/x/web-interface/view?bvid='+encodeURIComponent(bvid),'include');
-      if (view.code !== 0) { state.result={status:'platform',code:view.code}; return; }
+      if (view.code !== 0) { state.result=finish('platform',{message:'平台视频信息暂不可读（'+view.code+'）'}); return; }
+      if(view.data?.bvid!==bvid)throw new Error('视频信息与当前 BVID 不一致');
       const aid = view.data?.aid;
       let cid = url.hostname === 'player.bilibili.com' ? url.searchParams.get('cid') : '';
       if (!cid) {
@@ -47,6 +55,9 @@
       }
       if (!/^\d+$/.test(String(cid || ''))) throw new Error('identity');
       const key={bvid,cid:String(cid),page};
+      if(initial.playerCid&&initial.playerCid!==String(cid)){state.result=finish('waiting',{key});return;}
+      const duration=Number(view.data?.pages?.find(item=>String(item.cid)===String(cid))?.duration||0);
+      if(duration&&initial.duration&&Math.abs(initial.duration-duration)>Math.max(5,duration*.015)){state.result=finish('waiting',{key});return;}
       // Reuse a matching request already made by the real player. Never construct a WBI signature.
       const observed = performance.getEntriesByType('resource').slice(-300).reverse().map(item => {
         try { return new URL(item.name); } catch { return null; }
@@ -59,20 +70,21 @@
         try { player=await read(observed.href,'include'); } catch {}
       }
       if (!player || player.code!==0) player=await read(ordinary,'include');
-      if (player.code !== 0) { state.result={status:'platform',code:player.code,key}; return; }
-      if ((player.data?.cid && String(player.data.cid) !== String(cid)) ||
-          (player.data?.bvid && player.data.bvid !== bvid)) throw new Error('identity');
-      if (player.data?.need_login_subtitle) { state.result={status:'login',key}; return; }
+      if (player.code !== 0) { state.result=finish('platform',{key,message:'平台字幕信息暂不可读（'+player.code+'）'}); return; }
+      if(String(player.data?.cid||'')!==String(cid)||(player.data?.aid&&String(player.data.aid)!==String(aid))||
+          (player.data?.bvid&&player.data.bvid!==bvid))throw new Error('字幕接口返回了其他视频，已拒绝');
+      if (player.data?.need_login_subtitle) { state.result=finish('login',{key,message:'请在软件内登录 B站后重试'}); return; }
       const tracks = player.data?.subtitle?.subtitles;
       const rank = t => /^(zh|zh-CN|zh-Hans)$/.test(t.lan) ? 0 : /^ai-zh/.test(t.lan) ? 1 : /zh/.test(t.lan) ? 2 : 3;
       const valid = (Array.isArray(tracks) ? tracks.slice(0,30) : []).filter(t => {
         try { safeCaption(t.subtitle_url); return true; } catch { return false; }
-      }).sort((a,b) => rank(a)-rank(b));
-      if (!valid.length) { state.result={status:'no_tracks',key}; return; }
+      }).filter(t=>/zh/.test(String(t.lan))).sort((a,b) => rank(a)-rank(b));
+      if (!valid.length) { state.result=finish('no_tracks',{key,message:'平台未提供可读的中文字幕'}); return; }
       const track=valid[0], caption=await read(safeCaption(track.subtitle_url),'omit',true);
-      state.result={status:'ok',key,label:String(track.lan_doc || track.lan || '字幕').slice(0,60),caption};
+      if(!stillCurrent()){state.result=finish('stale',{key,message:'播放实例已经变化，丢弃旧字幕'});return;}
+      state.result=finish('ok',{key,verified:true,track_id:String(track.id_str||track.id||track.lan),label:String(track.lan_doc||track.lan||'中文字幕').slice(0,60),caption});
     } catch (error) {
-      state.result={status:'error',reason:error.name === 'AbortError' ? 'timeout' : String(error.message).slice(0,60)};
+      state.result=finish('error',{message:error.name==='AbortError'?'字幕请求超时':String(error.message).slice(0,100)});
     } finally {
       clearTimeout(timer); state.done=true;
     }

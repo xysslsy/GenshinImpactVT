@@ -51,7 +51,7 @@ class BiliSubtitleTests(unittest.TestCase):
     def test_login_requirement_is_not_reported_as_no_captions(self):
         feed=BilibiliSubtitleFeed(Browser())
         feed.use_player_data({'code':0,'data':{'need_login_subtitle':True}})
-        self.assertIn('登录',feed.message);self.assertIsNone(feed._future);feed.close()
+        self.assertIn('登录',feed.message);self.assertIsNone(feed._recovery_task);feed.close()
 
     def test_large_cid_serialized_as_float(self):
         self.assertEqual(normalize_cid(32294243227.0),'32294243227')

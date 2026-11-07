@@ -26,6 +26,7 @@ tmp*/
 .test-same-page/
 .test-v1/
 .test-controls-v13/
+.test-v2/
 *.lnk
 releases/
 dist/

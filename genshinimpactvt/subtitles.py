@@ -13,30 +13,27 @@ from PySide6.QtWidgets import QDialog
 from .ocr_engine import worker
 from .subtitle_text import DEFAULT_REGION, StableText, valid_region
 from .subtitle_ui import SubtitlePage, RegionDialog
-from .bilibili_subtitles import BilibiliSubtitleFeed, is_bilibili_page, official_player_url
+from .bilibili_subtitles import BilibiliSubtitleFeed, is_bilibili_page, official_player_url, MEDIA_CONTEXT
 
 
 # Query only active cues and *visible* rendered subtitles, never the transcript panel.
 PAGE_SCRIPT = r'''(()=>{
  const timingOnly=false;
- const visible=e=>{let r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'&&Number(s.opacity)!==0};
- const all=timingOnly?[]:Array.from(document.querySelectorAll('video')).filter(visible);
- const v=timingOnly?(document.querySelector('.bpx-player-video-wrap video')||document.querySelector('video')):all.sort((a,b)=>b.clientWidth*b.clientHeight-a.clientWidth*a.clientHeight)[0];
- if(!v)return null;
- if(!v.__givtId){v.__givtId=String(Date.now())+Math.random();v.__givtEpoch=0;v.addEventListener('seeking',()=>v.__givtEpoch++);v.addEventListener('emptied',()=>v.__givtEpoch++);}
+ const snapshot=MEDIA_CONTEXT, context=snapshot();if(!context)return null;const v=context.element;
+ const visible=e=>{let r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'};
  let cues=[];if(!timingOnly){for(const t of v.textTracks){if(t===window.__genshinimpactvtCaptionTrack)continue;if(t.mode!=='disabled'&&t.activeCues)for(const c of t.activeCues)cues.push(c.text||'');}
- if(!cues.length)cues=Array.from(document.querySelectorAll('.bpx-player-subtitle-item-text,.bilibili-player-video-subtitle span,.bili-subtitle-x-subtitle-panel-major-group,.bili-subtitle-x-subtitle-panel-minor-group')).filter(visible).map(e=>e.textContent||'');}
+ if(!cues.length)cues=Array.from((v.closest('.bpx-player-container,.bilibili-player')||v.parentElement).querySelectorAll('.bpx-player-subtitle-item-text,.bilibili-player-video-subtitle span,.bili-subtitle-x-subtitle-panel-major-group,.bili-subtitle-x-subtitle-panel-minor-group')).filter(visible).map(e=>e.textContent||'');}
  const state=window.__INITIAL_STATE__||{};
  const params=new URL(location.href).searchParams;
  const r=timingOnly?{width:0,height:0,x:0,y:0}:v.getBoundingClientRect();let w=r.width,h=r.height,x=r.x,y=r.y;
  if(!timingOnly&&v.videoWidth&&v.videoHeight&&getComputedStyle(v).objectFit==='contain'){
   let k=Math.min(w/v.videoWidth,h/v.videoHeight),nw=v.videoWidth*k,nh=v.videoHeight*k;x+=(w-nw)/2;y+=(h-nh)/2;w=nw;h=nh;
  }
- return {id:location.href+'|'+v.__givtId+'|'+v.currentSrc,epoch:v.__givtEpoch,time:v.currentTime,paused:v.paused,
+ return {document:context.document,media:context.media,src:context.src,player_cid:context.playerCid,duration:context.duration,id:context.document+'|'+v.__givtId+'|'+v.currentSrc,epoch:v.__givtEpoch,time:v.currentTime,paused:v.paused,
  seeking:v.seeking,ended:v.ended,ready:v.readyState,text:cues.join(' ').slice(0,500),
  bili:(()=>{const bvid=location.pathname.match(/\/video\/(BV[0-9A-Za-z]{10})(?:\/|$)/)?.[1]||params.get('bvid')||state.bvid||state.videoData?.bvid;const p=Number(params.get('p')||1);const same=(state.bvid||state.videoData?.bvid)===bvid;const part=same?(state.videoData?.pages||state.pages||[]).find(x=>Number(x.page)===p):null;return {bvid,cid:params.get('cid')||part?.cid||(same?(state.cid||state.videoData?.cid):null)}})(),
  rect:[x,y,w,h],viewport:[innerWidth,innerHeight]};
-})()'''
+})()'''.replace('MEDIA_CONTEXT',MEDIA_CONTEXT)
 TIMING_SCRIPT = PAGE_SCRIPT.replace('const timingOnly=false;','const timingOnly=true;')
 
 
@@ -98,6 +95,7 @@ class SubtitleController(QObject):
         self.page.full_page.clicked.connect(self.return_full_page)
         self.gate = StableText(); self.generation = 0; self._source = ''
         self._caption_state=('','')
+        self._last_direction_time=None;self._last_direction_token=None
         self._metadata = None; self._identity = None; self._epoch = None
         self._page_task = None; self._capture = None; self._capture_for_picker = False
         self._page_generation = 0
@@ -111,7 +109,13 @@ class SubtitleController(QObject):
         browser.source_changed.connect(self.reset_timeline)
         browser.loading.connect(self.reset_timeline)
         self.timer = QTimer(self); self.timer.timeout.connect(self.tick); self.timer.setInterval(300)
+        self.native_feed.changed.connect(self.feed_state_changed)
         if self.enabled:self.timer.start()
+
+    def feed_state_changed(self):
+        if self.mode=='auto' and not self.native_feed.timeline.cues:
+            self.gate.reset();self.compass.clear();self.publish_caption('','')
+            self.page.text.setText('—');self._last_direction_time=None;self._last_direction_token=None
 
     def set_enabled(self, enabled):
         self.enabled = bool(enabled); self.settings.setValue('subtitles/enabled', self.enabled)
@@ -141,6 +145,7 @@ class SubtitleController(QObject):
         self.generation += 1; self.gate.reset(); self.compass.clear(); self.page.text.setText('—')
         self.publish_caption('','')
         self._source = ''; self._last_time = None; self._metadata = None
+        self._last_direction_time=None;self._last_direction_token=None
 
     def publish_caption(self,text,source):
         value=str(text or '').strip()[:500]
@@ -231,14 +236,26 @@ class SubtitleController(QObject):
         elif not self._worker_ready and now-self._worker_started > 45: self.worker_error('模型加载超时')
         elif self._job and now-self._job[1] > 10: self.worker_error('单次识别超时')
 
-    def deliver(self, text, source):
+    def deliver(self, text, source, update_direction=True):
         if source != self._source:
             self._source = source; self.gate.reset()
         accepted = self.gate.observe(text,source)
         self.page.text.setText(text or '未识别到字幕')
         self.publish_caption(text,source)
-        if accepted is not None: self.compass.set_text(accepted)
+        if update_direction and accepted is not None: self.compass.set_text(accepted)
         # Direction hold expires independently of subtitle gaps/non-direction sentences.
+
+    def deliver_platform(self,seconds):
+        feed=self.native_feed
+        self.deliver(feed.text_at(seconds),'platform',update_direction=False)
+        if not feed.timeline.cues:return
+        since=self._last_direction_time
+        if since is not None and (seconds<since or seconds-since>2):since=None
+        for when,token,phrase in feed.direction_events(seconds,since):
+            identity=(feed.video_key,token)
+            if identity!=self._last_direction_token:
+                self.compass.set_text(phrase);self._last_direction_token=identity
+        self._last_direction_time=seconds
 
     def read_page(self, now):
         if self._page_task is not None:
@@ -267,9 +284,12 @@ class SubtitleController(QObject):
                     self._last_time,self._last_wall = metadata['time'],now
                     self._metadata = metadata
                     bili = metadata.get('bili') or {}
-                    self.native_feed.set_video(bili.get('bvid'),bili.get('cid'))
+                    self.native_feed.set_context(metadata)
                     if metadata['seeking'] or metadata['ended']:
                         self.compass.clear(); self.gate.reset();self.publish_caption('','');self.page.text.setText('—')
+                    elif self.enabled and self.mode=='auto' and is_bilibili_page(str(self.browser.web.Source)):
+                        self.deliver_platform(metadata['time'])
+                        self.page.status.setText(self.native_feed.message)
                     elif self.enabled and self.mode != 'ocr' and metadata['text'].strip():
                         self.deliver(metadata['text'],'dom'); self.page.status.setText('正在读取网页字幕')
                     elif self.enabled and self.mode == 'dom':
@@ -335,7 +355,7 @@ class SubtitleController(QObject):
         self.read_page(now); self.read_replies(now)
         meta = self._metadata
         if not meta or meta['seeking'] or meta['ended'] or meta['ready'] < 2: return
-        if self.mode != 'ocr':self.timer.setInterval(700 if meta['paused'] else 300)
+        if self.mode != 'ocr':self.timer.setInterval(200 if meta['paused'] else 100)
         else:self.timer.setInterval(300)
         if self._capture is not None: return
         picker = self._pick_requested

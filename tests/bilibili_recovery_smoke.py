@@ -64,10 +64,10 @@ def main():
         after=yield from js("(()=>{let v=document.querySelector('video');return {id:v.__givtId,time:v.currentTime}})()")
         check('manual_retry_keeps_video_and_position',reloads==0 and before['id']==after['id'] and abs(before['time']-after['time'])<.25)
         win.open_url(base+'?p=4');yield from ready()
-        check('new_part_automatically_loads',feed.video_key[1]!=key3[1] and feed._resolved_page[1]==4)
+        check('new_part_automatically_loads',feed.video_key[1]!=key3[1] and feed._loaded_page[1]==4)
         win.open_url(base+'?p=3');yield from ready()
-        print('return_part_observation',{'initial_cid':key3[1],'return_cid':feed.video_key[1],'initial_cues':count3,'return_cues':len(feed.timeline.cues),'part':feed._resolved_page[1] if feed._resolved_page else None},flush=True)
-        check('return_to_previous_part_automatically_loads',feed.video_key==key3 and feed._resolved_page[1]==3 and len(feed.timeline.cues)==count3)
+        print('return_part_observation',{'initial_cid':key3[1],'return_cid':feed.video_key[1],'initial_cues':count3,'return_cues':len(feed.timeline.cues),'part':feed._loaded_page[1] if feed._loaded_page else None},flush=True)
+        check('return_to_previous_part_automatically_loads',feed.video_key==key3 and feed._loaded_page[1]==3 and len(feed.timeline.cues)==count3)
         counts=[]
         for _ in range(2):
             service.refresh_subtitles();yield from ready();counts.append(len(feed.timeline.cues))

@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 
 from PySide6.QtCore import QObject, QTimer, Signal
+from .subtitle_text import direction_steps
 
 MAX_BYTES = 4 * 1024 * 1024
 PLAYER_PATHS = ('/x/player/wbi/v2', '/x/player/v2')
@@ -64,7 +65,8 @@ def page_identity(url):
         return (bvid,page,normalize_cid(query.get('cid',[''])[0]) if parsed.hostname=='player.bilibili.com' else '')
     except (ValueError,TypeError): return None
 
-RECOVERY_SCRIPT=Path(__file__).with_name('caption_recovery.js').read_text(encoding='utf-8')
+MEDIA_CONTEXT=Path(__file__).with_name('media_context.js').read_text(encoding='utf-8')
+RECOVERY_SCRIPT=Path(__file__).with_name('caption_recovery.js').read_text(encoding='utf-8').replace('MEDIA_CONTEXT',MEDIA_CONTEXT)
 RETRY_DELAYS=(2.,5.,12.)
 
 
@@ -110,6 +112,21 @@ class CueTimeline:
             start,end,text=self.cues[n]
             if start<=seconds<end:found.append(text)
         return ' '.join(dict.fromkeys(found))[:500]
+
+    def direction_events(self,seconds,since=None):
+        end=bisect.bisect_right(self.starts,seconds)
+        begin=max(0,bisect.bisect_right(self.starts,since)-1) if since is not None else max(0,end-1)
+        events=[]
+        for index in range(begin,end):
+            start,stop,text=self.cues[index]
+            steps=direction_steps(text)
+            current=[]
+            for part,(fraction,phrase) in enumerate(steps):
+                when=start+(stop-start)*fraction
+                if since is not None and since<when<=seconds:events.append((when,(index,part),phrase))
+                if start<=seconds<stop and when<=seconds:current.append((when,(index,part),phrase))
+            if current and current[-1] not in events:events.append(current[-1])
+        return sorted(events,key=lambda value:value[0])
 
 
 def choose_track(tracks):
@@ -157,276 +174,167 @@ def fetch_caption(url):
 
 
 class BilibiliSubtitleFeed(QObject):
+    """One loader, one generation and one verified playback context. No response racing."""
     changed=Signal()
 
     def __init__(self,browser,parent=None):
-        super().__init__(parent)
-        self.browser=browser;self.enabled=False;self.core=None;self.epoch=0
-        self.video_key=None;self.timeline=CueTimeline();self.message='请打开 B 站视频，并开启播放器字幕'
-        self.label='B站字幕';self._pending=[];self._records={};self._chosen=None
-        self._executor=None;self._future=None;self._fetch_key=None;self._closed=False
-        self._subscribed=False;self._handler=self.on_resource
-        self._page_key=None
-        self._recovery_task=None;self._recovery_phase='';self._recovery_token=''
-        self._attempts=0;self._retry_at=0.;self._recovery_started=0.
-        self._resolved_page=None;self._resolved_key=None
-        self.timer=QTimer(self);self.timer.timeout.connect(self.poll);self.timer.setInterval(150)
-        browser.ready.connect(self.attach)
-        browser.source_changed.connect(self.on_source_changed)
+        super().__init__(parent);self.browser=browser;self.enabled=False;self.core=None
+        self.epoch=0;self.video_key=None;self.timeline=CueTimeline();self.label='B站字幕'
+        self.message='请打开 B站视频';self._closed=False;self._page_key=None
+        self._context=None;self._loaded_context=None;self._loaded_page=None
+        self._recovery_task=None;self._recovery_token='';self._recovery_phase=''
+        self._job=None;self._attempts=0;self._retry_at=0.;self._recovery_started=0.
+        self._waiting_context=None;self._subscribed=False;self._records={}
+        self.timer=QTimer(self);self.timer.setInterval(80);self.timer.timeout.connect(self.poll)
+        browser.ready.connect(self.attach);browser.source_changed.connect(self.on_source_changed)
         browser.loading.connect(self.reset)
 
+    def source(self):return str(getattr(self.browser.web,'Source','') or '')
     def attach(self):
         self.core=self.browser.web.CoreWebView2
-        self.update_subscription()
-        if self.enabled:self.request_recovery()
-
-    def update_subscription(self):
-        if self.core is None:return
-        if self.enabled and not self._subscribed:
-            self.core.WebResourceResponseReceived += self._handler;self._subscribed=True
-        elif not self.enabled and self._subscribed:
-            self.core.WebResourceResponseReceived -= self._handler;self._subscribed=False
+        self.request_recovery()
+    def update_subscription(self):pass  # v2 never accepts unsolicited player responses.
+    def on_resource(self,*args):pass
 
     def set_enabled(self,enabled):
         enabled=bool(enabled)
-        if self.enabled==enabled:return
-        self.enabled=enabled
-        self.update_subscription()
-        self.reset()
-
-    def reset(self,*args):
-        self.cancel_recovery()
-        self.epoch+=1;self.video_key=None;self.timeline=CueTimeline();self._records.clear();self._chosen=None
-        self._attempts=0;self._retry_at=0.;self._resolved_page=None;self._resolved_key=None
-        self.message='请在软件内登录 B 站；播放器开启 AI/CC 字幕后可读取'
-        # Outstanding tasks are drained, but their epoch no longer matches.
-        if self._pending or self._future:self.timer.start()
-        self.request_recovery()
-        self.changed.emit()
-
-    def on_source_changed(self,url):
-        try:
-            p=urlsplit(url);query=parse_qs(p.query)
-            page=page_identity(url) or (p.hostname,p.path)
-        except ValueError:page=None
-        if page!=self._page_key:
-            self._page_key=page;self.reset()
-
-    def set_video(self,bvid,cid):
-        cid=normalize_cid(cid)
-        if not bvid or not cid:return
-        identity=page_identity(str(getattr(self.browser.web,'Source','') or ''))
-        if identity and str(bvid)!=identity[0]:return
-        key=self._resolved_key if self._resolved_page==identity and self._resolved_key else (str(bvid),cid)
-        if key!=self.video_key:
-            self.video_key=key;self.timeline=CueTimeline();self._chosen=None
-        record=self._records.get(key[1])
-        if record:self.use_player_data(record)
-        if not self.timeline.cues:self.request_recovery()
-
-    def on_resource(self,sender,event):
-        if not self.enabled or self._closed:return
-        if not is_bilibili_page(str(getattr(self.browser.web,'Source','') or '')):return
-        try:
-            p=urlsplit(str(event.Request.Uri))
-            if p.hostname!='api.bilibili.com' or p.path not in PLAYER_PATHS:return
-            cid=parse_qs(p.query).get('cid',[''])[0]
-            if not cid.isdigit() or int(event.Response.StatusCode)!=200:return
-            page=urlsplit(str(getattr(self.browser.web,'Source','') or ''));page_query=parse_qs(page.query)
-            if page.hostname=='player.bilibili.com' and page.path=='/player.html':
-                expected=page_query.get('cid',[''])[0]
-                if expected and expected!=cid:return
-                bvid=page_query.get('bvid',[''])[0]
-                if bvid:self.set_video(bvid,cid)
-            if len(self._pending)>=2:return
-            task=event.Response.GetContentAsync()
-            self._pending.append((self.epoch,cid,task,time.monotonic()))
-            self.timer.start()
-        except Exception:
-            self.message='B站字幕信息读取失败，请刷新页面后重试'
-
-    def use_player_data(self,document):
-        if self.timeline.cues:return
-        data=document.get('data') or {}
-        if self.video_key and ((data.get('cid') and normalize_cid(data['cid'])!=self.video_key[1]) or
-                               (data.get('bvid') and data['bvid']!=self.video_key[0])):
-            self.message='播放器返回的分 P 信息不一致，正在重新读取'
-            self.request_recovery();return
-        if document.get('code')!=0:
-            self.message='B站未提供可读字幕，请检查登录状态或刷新页面';return
-        if data.get('need_login_subtitle'):
-            self.message='这集字幕需要登录：请在软件内登录 B站，再点“刷新字幕”'
-            return
-        track=choose_track((data.get('subtitle') or {}).get('subtitles',[]))
-        if not track:
-            self.message='这集暂未提供可读 AI/CC 字幕；可先在 B站播放器检查字幕选项'
-            return
-        url=track['subtitle_url'];key=(self.epoch,self.video_key,url)
-        if key==self._chosen:return
-        if self._future is not None:return
-        self._chosen=key;self._fetch_key=key
-        self.label='B站 · '+str(track.get('lan_doc') or track.get('lan') or '字幕')[:60]
-        self.message='正在读取 B站提供的字幕文本…'
-        if self._executor is None:self._executor=concurrent.futures.ThreadPoolExecutor(max_workers=1,thread_name_prefix='bili-caption')
-        self._future=self._executor.submit(fetch_caption,url);self.timer.start()
-
-    def poll(self):
-        for entry in list(self._pending):
-            epoch,cid,task,started=entry
-            if not task.IsCompleted:
-                if time.monotonic()-started>20:
-                    self._pending.remove(entry)
-                    self.message='播放器响应超时，正在自动重试字幕'
-                    self.request_recovery()
-                continue
-            self._pending.remove(entry)
-            try:
-                from System import Array,Byte
-                stream=task.Result
-                if stream is None:continue
-                if epoch!=self.epoch or not self.enabled:
-                    stream.Dispose();continue
-                try:
-                    chunk=Array.CreateInstance(Byte,65536);parts=[];total=0
-                    while True:
-                        count=stream.Read(chunk,0,len(chunk))
-                        if not count:break
-                        total+=count
-                        if total>MAX_BYTES:raise ValueError('播放器响应过大')
-                        parts.append(bytes(chunk)[:count])
-                finally:stream.Dispose()
-                if epoch!=self.epoch or not self.enabled:continue
-                document=json.loads(b''.join(parts).decode('utf-8-sig'))
-                if not isinstance(document,dict):continue
-                document=player_record(document);self._records[cid]=document
-                if len(self._records)>2:self._records.pop(next(iter(self._records)))
-                if self.video_key and cid==self.video_key[1]:self.use_player_data(document)
-                self.changed.emit()
-            except Exception:
-                if epoch==self.epoch:self.message='字幕信息读取失败，请刷新字幕重试'
-        if self._future is not None and self._future.done():
-            future,key=self._future,self._fetch_key;self._future=None;self._fetch_key=None
-            if self.enabled and key[0]==self.epoch and key[1]==self.video_key and not self.timeline.cues:
-                try:
-                    cues=future.result()
-                    if not cues:raise ValueError("Empty caption timeline")
-                    self.timeline=CueTimeline(cues)
-                    self.message=f'{self.label} · 已载入 {len(self.timeline.cues)} 条字幕，无本地推理'
-                except Exception:
-                    self.message='字幕文本加载失败，正在自动重试'
-                    self.request_recovery()
-                self.changed.emit()
-        self.poll_recovery(time.monotonic())
-        if not self._pending and self._future is None:
-            if self._recovery_task is None and not self._retry_at:self.timer.stop()
-            if self._executor is not None:
-                self._executor.shutdown(wait=False);self._executor=None
+        if self.enabled!=enabled:self.enabled=enabled;self.reset()
 
     def cancel_recovery(self):
         token=self._recovery_token
         if token:
-            try:self.browser.execute_script("(()=>{let s=window.__givtCaptionRecovery;if(s&&s.token==="+json.dumps(token)+"){s.abort.abort();delete window.__givtCaptionRecovery}})()")
+            try:self.browser.execute_script('(()=>{let s=window.__givtCaptionRecovery;if(s&&s.token==='+json.dumps(token)+'){s.abort.abort();delete window.__givtCaptionRecovery}})()')
             except Exception:pass
-        self._recovery_task=None;self._recovery_token='';self._retry_at=0.
+        self._recovery_task=None;self._recovery_token='';self._job=None;self._retry_at=0.
 
-    def request_recovery(self, immediate=False):
-        if self._closed or not self.enabled or self.timeline.cues:return
-        if not page_identity(str(getattr(self.browser.web,'Source','') or '')):return
-        if self._attempts>=4 or self._recovery_task is not None:return
-        if not self._retry_at:self._retry_at=time.monotonic()+(.0 if immediate else .4)
+    def reset(self,*args):
+        self.cancel_recovery();self.epoch+=1;self.timer.stop()
+        self.video_key=None;self.timeline=CueTimeline();self._loaded_context=None;self._loaded_page=None
+        self._context=None;self._attempts=0;self._waiting_context=None
+        self.message='正在核对当前视频，请等待播放器就绪';self.changed.emit()
+
+    def on_source_changed(self,url):
+        key=page_identity(url)
+        if key!=self._page_key:self._page_key=key;self.reset()
+
+    @staticmethod
+    def signature(meta):
+        if not isinstance(meta,dict):return None
+        if not meta.get('document') or not meta.get('media') or not meta.get('src'):return None
+        return (str(meta['document']),str(meta['media']),str(meta['src']),str(meta.get('player_cid') or ''))
+
+    def set_context(self,metadata):
+        key=page_identity(self.source());signature=self.signature(metadata)
+        if not key or signature is None:return
+        if self._context and self.signature(self._context)!=signature:
+            self.reset()
+        self._context={k:metadata.get(k) for k in ('document','media','src','player_cid','duration','ready')}
+        self.request_recovery()
+
+    def set_video(self,bvid,cid):
+        # Page globals are hints, never an authority capable of replacing a verified timeline.
+        return
+
+    def use_player_data(self,document):
+        if self.timeline.cues:return
+        data=document.get('data') or {}
+        if data.get('need_login_subtitle'):self.message='请在软件内登录 B站后重试字幕'
+        else:self.message='正在独立核对当前播放器与字幕归属'
+        self.request_recovery()
+
+    def request_recovery(self,immediate=False):
+        if self._closed or not self.enabled or self.timeline.cues or self._recovery_task is not None:return
+        if not page_identity(self.source()) or not self._context or not self.core:return
+        if (self._context.get('ready') or 0)<2 or self._attempts>=5:return
+        if self._waiting_context==self.signature(self._context):return
+        if not self._retry_at:self._retry_at=time.monotonic()+(0 if immediate else .1)
         self.timer.start()
 
     def refresh(self):
-        self.reset()
-        if self.enabled:
-            self._retry_at=time.monotonic();self.timer.start()
-            self.message='正在重新读取当前视频字幕，视频不会刷新'
+        context=self._context;self.reset();self._context=context
+        self.message='正在重新核对字幕，不刷新视频'
+        self.request_recovery(immediate=True)
 
-    def retry_recovery(self, message):
-        if self.timeline.cues:self._retry_at=0.;return
-        if self._attempts<4:
-            delay=RETRY_DELAYS[max(0,self._attempts-1)]
+    def retry_recovery(self,message):
+        if self.timeline.cues:return
+        if self._attempts<5:
+            delay=(1.,2.,4.,8.)[max(0,self._attempts-1)]
             self._retry_at=time.monotonic()+delay
-            self.message=message+f'；{int(delay)} 秒后自动重试（{self._attempts}/4）'
-        else:
-            self._retry_at=0.
-            self.message=message+'；自动重试已结束，可点“重试字幕”'
+            self.message=message+f'；{int(delay)} 秒后重试（{self._attempts}/5）'
+            self.timer.start()
+        else:self._retry_at=0.;self.message=message+'；请点“重试字幕”再次核对'
         self.changed.emit()
 
-    def apply_recovery(self, result):
-        identity=page_identity(str(getattr(self.browser.web,'Source','') or ''))
-        if not identity or not isinstance(result,dict):return
-        key=result.get('key') or {}
-        cid=normalize_cid(key.get('cid'))
-        if key and (key.get('bvid')!=identity[0] or key.get('page')!=identity[1] or (identity[2] and cid!=identity[2])):return
-        status=result.get('status')
-        if status=='ok' and cid:
+    def apply_recovery(self,result,job=None):
+        job=job or self._job
+        if not job or job!=(self._recovery_token,self.epoch,self.signature(self._context),page_identity(self.source())):return False
+        if not isinstance(result,dict) or result.get('token')!=job[0]:return False
+        proof=result.get('context') or {}
+        if self.signature(proof)!=job[2]:return False
+        key=result.get('key') or {};identity=job[3];cid=normalize_cid(key.get('cid'))
+        if not identity or key.get('bvid')!=identity[0] or key.get('page')!=identity[1] or not cid:return False
+        if identity[2] and identity[2]!=cid:return False
+        if self._context.get('player_cid') and str(self._context['player_cid'])!=cid:return False
+        if result.get('status')=='ok':
+            if not result.get('track_id') or not result.get('verified'):return False
             cues=parse_cues(result.get('caption'))
-            if not cues:self.retry_recovery('平台返回空字幕');return
-            self._resolved_page=identity;self._resolved_key=(identity[0],cid)
-            self.video_key=self._resolved_key;self.timeline=CueTimeline(cues)
-            self.label='B站 · '+str(result.get('label','字幕'))[:60]
-            self.message=f'{self.label} · 已载入 {len(cues)} 条字幕，无本地推理'
-            self._retry_at=0.;self.changed.emit();return
-        if self.timeline.cues:return
-        if status=='login':message='这集字幕需要登录，请在软件内正常登录 B站'
-        elif status=='no_tracks':message='平台暂未提供这集可读的 AI/CC 字幕'
-        elif status=='platform':
-            code=result.get('code')
-            if code==-101:message='B站登录已失效，请在软件内重新登录'
-            elif code==-412:message='B站暂时限制请求，请稍后重试'
-            else:message='平台暂未返回可读字幕（代码 '+str(code)[:12]+'）'
-        else:message='字幕请求超时或网络暂不可用'
-        self.retry_recovery(message)
+            if not cues:raise ValueError('平台返回空字幕')
+            duration=float(self._context.get('duration') or 0)
+            if duration and max(c[1] for c in cues)>duration+5:raise ValueError('字幕时间超过当前视频长度，拒绝载入')
+            self.timeline=CueTimeline(cues);self.video_key=(identity[0],cid)
+            self._loaded_context=job[2];self._loaded_page=identity
+            self.label=str(result.get('label','中文'))[:60]
+            self.message=f'已核对 {identity[0]} · P{identity[1]} · {self.label} · {len(cues)} 条字幕'
+            self._retry_at=0.;self.changed.emit();return True
+        return False
 
-    def poll_recovery(self, now):
-        if self._closed or not self.enabled:return
-        if self.timeline.cues:
-            self._retry_at=0.
-            if self._recovery_task is not None:self.cancel_recovery()
-            return
+    def poll(self):
+        if self._closed or not self.enabled:self.timer.stop();return
+        now=time.monotonic()
         if self._recovery_task is not None:
-            if now-self._recovery_started>22:
-                self.cancel_recovery();self.retry_recovery('字幕请求超时');return
+            if now-self._recovery_started>25:
+                self.cancel_recovery();self.retry_recovery('读取超时');return
             if not self._recovery_task.IsCompleted:return
             task=self._recovery_task;self._recovery_task=None
             try:
                 value=json.loads(str(task.Result))
                 if self._recovery_phase=='read' and isinstance(value,dict) and value.get('done'):
+                    job=self._job;result=value.get('result') or {}
+                    accepted=self.apply_recovery(result,job)
+                    status=result.get('status');message=result.get('message','字幕归属核对失败，未显示本次结果')
                     self.cancel_recovery()
-                    self.apply_recovery(value.get('result'));return
+                    if not accepted:
+                        if status=='waiting':
+                            self._attempts=max(0,self._attempts-1);self._waiting_context=self.signature(self._context)
+                            self.message='等待播放器切到当前视频，暂不显示字幕'
+                        else:self.retry_recovery(message)
+                    if not self._retry_at:self.timer.stop()
+                    return
                 token=json.dumps(self._recovery_token)
                 self._recovery_task=self.browser.execute_script('(()=>{let s=window.__givtCaptionRecovery;return s&&s.token==='+token+'?{done:s.done,result:s.result}:null})()')
                 self._recovery_phase='read'
-            except Exception:self.cancel_recovery();self.retry_recovery('字幕读取暂不可用')
+            except Exception as exc:
+                self.cancel_recovery();self.retry_recovery('字幕读取失败：'+str(exc)[:80])
             return
-        if not self._retry_at or now<self._retry_at:return
+        if not self._retry_at or now<self._retry_at:
+            if not self._retry_at:self.timer.stop()
+            return
         self._retry_at=0.
-        if not page_identity(str(getattr(self.browser.web,'Source','') or '')):return
-        if self.core is None:return  # attach() schedules again when the engine is ready.
+        if not self._context or not page_identity(self.source()):self.timer.stop();return
         self._attempts+=1;self._recovery_started=now
         self._recovery_token=f'{self.epoch}-{self._attempts}-{now}'
+        self._job=(self._recovery_token,self.epoch,self.signature(self._context),page_identity(self.source()))
         try:
-            self._recovery_task=self.browser.execute_script(RECOVERY_SCRIPT.replace('TOKEN',json.dumps(self._recovery_token)))
-            self._recovery_phase='begin'
-            self.message=f'正在读取当前视频字幕（{self._attempts}/4）…'
-        except Exception:self.retry_recovery('浏览器尚未准备好读取字幕')
+            self._recovery_task=self.browser.execute_script(RECOVERY_SCRIPT.replace('TOKEN',json.dumps(self._recovery_token)).replace('EXPECTED',json.dumps(self._job[3])))
+            self._recovery_phase='begin';self.message=f'正在核对当前视频字幕（{self._attempts}/5）'
+        except Exception:self.cancel_recovery();self.retry_recovery('浏览器暂不可读')
 
+    def poll_recovery(self,now):self.poll()
     def text_at(self,seconds):
-        return self.timeline.at(seconds) if self.enabled else ''
-
+        if not self.enabled or self._loaded_context!=self.signature(self._context) or self._loaded_page!=page_identity(self.source()):return ''
+        return self.timeline.at(seconds)
+    def direction_events(self,seconds,since=None):
+        if not self.enabled or self._loaded_context!=self.signature(self._context) or self._loaded_page!=page_identity(self.source()):return []
+        return self.timeline.direction_events(seconds,since)
     def close(self):
-        self.cancel_recovery()
-        self._closed=True;self.enabled=False;self.epoch+=1;self.timer.stop()
-        if self.core is not None:
-            try:
-                if self._subscribed:self.core.WebResourceResponseReceived -= self._handler
-            except Exception:pass
-            self.core=None
-        if self._executor is not None:self._executor.shutdown(wait=False,cancel_futures=True)
-        for _,_,task,_ in self._pending:
-            if task.IsCompleted:
-                try:
-                    if task.Result is not None:task.Result.Dispose()
-                except Exception:pass
-        self._pending.clear()
+        self.cancel_recovery();self.enabled=False;self._closed=True;self.timer.stop();self.core=None

@@ -90,6 +90,12 @@ class ControllerTests(unittest.TestCase):
         service.read_page(10)
         self.assertIsNone(service._page_task)
 
+    def test_loader_reset_immediately_clears_previous_direction(self):
+        self.service.mode='auto';self.service.deliver('向北走','platform')
+        self.assertEqual(self.compass.active,{'北'})
+        self.service.native_feed.reset()
+        self.assertFalse(self.compass.active);self.assertEqual(self.service._caption_state,('',''))
+
     def test_region_and_mode_survive_restart(self):
         service=self.service;service.region=(.1,.6,.8,.3);service.save_region()
         service.page.mode.setCurrentIndex(service.page.mode.findData('ocr'))

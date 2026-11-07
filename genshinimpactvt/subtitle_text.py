@@ -23,15 +23,33 @@ def directions(text):
     text = normalize_text(text)
     # A sequence of instructions must not look like a diagonal direction.
     text = re.split(r'然后|接着|随后|再(?:往|向|朝|走|去)', text)[0]
-    text = re.sub(r'东西(?:方)?|东西南北|北京|南京|东京|西瓜|东北虎|东风|南瓜', '', text)
+    text = re.sub(r'东西南北|东西(?:方)?|北京|南京|东京|西瓜|东北虎|东风|南瓜', '', text)
+    # Spoken route language: 正北、北偏东、东北角、朝着西边、东面那个方向。
+    text = re.sub(r'北偏东|东偏北','东北',text)
+    text = re.sub(r'南偏东|东偏南','东南',text)
+    text = re.sub(r'北偏西|西偏北','西北',text)
+    text = re.sub(r'南偏西|西偏南','西南',text)
     text = re.sub(r'(?:不要|别|不能|不是|不往|不向|不朝)[^，。；！？,;!?]{0,6}?[东西南北](?:[东西南北])?(?:方向|边|方)?', '', text)
     found = set()
     for match in re.finditer(r'[东西南北]{1,2}', text):
         word = match.group()
         before, after = text[max(0, match.start()-4):match.start()], text[match.end():match.end()+4]
-        if text == word or re.search(r'往|向|朝|面|转|偏', before) or re.match(r'方向|边|方|侧|走|前进', after):
+        if text == word or text == '正'+word or re.search(r'往|向|朝|面|转|偏', before) or re.match(r'方向|边|方|侧|面|角|走|前进|这边', after):
             found.update(word)
     return found
+
+
+def direction_steps(text):
+    """Sequential phrases with proportional offsets inside a timed subtitle cue."""
+    text=normalize_text(text)
+    start=0;steps=[]
+    for match in re.finditer(r'然后|接着|随后|再(?=往|向|朝|走|去)',text):
+        phrase=text[start:match.start()]
+        if directions(phrase):steps.append((start/max(1,len(text)),phrase))
+        start=match.end()
+    phrase=text[start:]
+    if directions(phrase):steps.append((start/max(1,len(text)),phrase))
+    return steps
 
 
 class StableText:
