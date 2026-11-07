@@ -12,7 +12,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from .subtitle_text import direction_steps
 
 MAX_BYTES = 4 * 1024 * 1024
-PLAYER_PATHS = ('/x/player/wbi/v2', '/x/player/v2')
+PLAYER_PATHS = ('/x/player/wbi/v2',)
 
 
 def normalize_cid(value):
@@ -150,9 +150,10 @@ def player_record(document):
     tracks=subtitle.get('subtitles',[])
     if not isinstance(tracks,list):tracks=[]
     return {'code':document.get('code'),'data':{'cid':normalize_cid(data.get('cid')),
+        'aid':normalize_cid(data.get('aid')),
         'bvid':data.get('bvid') if isinstance(data.get('bvid'),str) and re.fullmatch(r'BV[0-9A-Za-z]{10}',data['bvid']) else '',
         'need_login_subtitle':bool(data.get('need_login_subtitle')),
-        'subtitle':{'subtitles':[{k:row.get(k) for k in ('lan','lan_doc','subtitle_url','ai_type')}
+        'subtitle':{'subtitles':[{k:row.get(k) for k in ('id','id_str','lan','lan_doc','subtitle_url','ai_type')}
                                 for row in tracks[:30] if isinstance(row,dict)]}}}
 
 
@@ -186,16 +187,76 @@ class BilibiliSubtitleFeed(QObject):
         self._recovery_task=None;self._recovery_token='';self._recovery_phase=''
         self._job=None;self._attempts=0;self._retry_at=0.;self._recovery_started=0.
         self._waiting_context=None;self._subscribed=False;self._records={}
+        self._record_times={};self._player_pending=[];self._resource_handler=self.on_resource
+        self._metadata_key=None
         self.timer=QTimer(self);self.timer.setInterval(80);self.timer.timeout.connect(self.poll)
+        self.resource_timer=QTimer(self);self.resource_timer.setInterval(80);self.resource_timer.timeout.connect(self.poll_resources)
         browser.ready.connect(self.attach);browser.source_changed.connect(self.on_source_changed)
         browser.loading.connect(self.reset)
 
     def source(self):return str(getattr(self.browser.web,'Source','') or '')
     def attach(self):
         self.core=self.browser.web.CoreWebView2
+        self.update_subscription()
         self.request_recovery()
-    def update_subscription(self):pass  # v2 never accepts unsolicited player responses.
-    def on_resource(self,*args):pass
+    def update_subscription(self):
+        if self.core is not None and not self._subscribed:
+            self.core.WebResourceResponseReceived+=self._resource_handler;self._subscribed=True
+
+    def on_resource(self,sender,event):
+        if self._closed:return
+        try:
+            uri=str(event.Request.Uri)
+            if not uri.startswith('https://api.bilibili.com/x/player/wbi/v2?'):return
+            parsed=urlsplit(uri);query=parse_qs(parsed.query)
+            aid=normalize_cid(query.get('aid',[''])[0]);cid=normalize_cid(query.get('cid',[''])[0])
+            if not cid or int(event.Response.StatusCode)!=200 or len(self._player_pending)>=4:return
+            self._player_pending.append((aid,cid,event.Response.GetContentAsync(),time.monotonic()))
+            self.resource_timer.start()
+        except Exception:pass
+
+    def store_player_record(self,document,request_aid,request_cid):
+        if not isinstance(document,dict) or document.get('code')!=0:return False
+        record=player_record(document);data=record['data'];aid=data.get('aid');cid=data.get('cid')
+        if not aid or not cid or cid!=request_cid or (request_aid and aid!=request_aid):return False
+        key=(aid,cid);changed=self._records.get(key)!=record
+        self._records[key]=record;self._record_times[key]=time.monotonic()
+        while len(self._records)>8:
+            oldest=min(self._record_times,key=self._record_times.get)
+            self._records.pop(oldest,None);self._record_times.pop(oldest,None)
+        if changed and self.enabled and self._metadata_key==key:
+            self._metadata_key=None
+            if self._recovery_task is None:self._attempts=0;self.request_recovery(immediate=True)
+        return True
+
+    def poll_resources(self):
+        for entry in list(self._player_pending):
+            aid,cid,task,started=entry
+            if not task.IsCompleted:
+                if time.monotonic()-started>20:self._player_pending.remove(entry)
+                continue
+            self._player_pending.remove(entry)
+            try:
+                from System import Array,Byte
+                stream=task.Result
+                if stream is None:continue
+                try:
+                    buffer=Array.CreateInstance(Byte,32768);chunks=[];size=0
+                    while True:
+                        count=stream.Read(buffer,0,len(buffer))
+                        if not count:break
+                        size+=count
+                        if size>MAX_BYTES:raise ValueError('Player response too large')
+                        chunks.append(bytes(buffer)[:count])
+                    self.store_player_record(json.loads(b''.join(chunks).decode('utf-8-sig')),aid,cid)
+                finally:stream.Dispose()
+            except Exception:pass
+        if not self._player_pending:self.resource_timer.stop()
+
+    def captured_records(self):
+        # Keep up to eight sanitized responses for this session, including a long
+        # paused video. Caption URL expiry is checked by the actual fetch.
+        return list(self._records.values())
 
     def set_enabled(self,enabled):
         enabled=bool(enabled)
@@ -212,6 +273,7 @@ class BilibiliSubtitleFeed(QObject):
         self.cancel_recovery();self.epoch+=1;self.timer.stop()
         self.video_key=None;self.timeline=CueTimeline();self._loaded_context=None;self._loaded_page=None
         self._context=None;self._attempts=0;self._waiting_context=None
+        self._metadata_key=None
         self.message='正在核对当前视频，请等待播放器就绪';self.changed.emit()
 
     def on_source_changed(self,url):
@@ -290,7 +352,7 @@ class BilibiliSubtitleFeed(QObject):
             self.timeline=CueTimeline(cues);self.video_key=(identity[0],cid)
             self._loaded_context=job[2];self._loaded_page=identity
             self.label=str(result.get('label','中文'))[:60]
-            self.message=f'已核对 {identity[0]} · P{identity[1]} · {self.label} · {len(cues)} 条字幕'
+            self.message=f'已核对 {identity[0]} · P{identity[1]} · 播放器{self.label} · {len(cues)} 条字幕'
             self._retry_at=0.;self.changed.emit();return True
         return False
 
@@ -313,7 +375,10 @@ class BilibiliSubtitleFeed(QObject):
                         if status=='waiting':
                             self._waiting_context=self.waiting_signature()
                             self.retry_recovery('等待播放器切到当前视频，暂不显示字幕')
-                        else:self.retry_recovery(message)
+                        else:
+                            if status in ('metadata_pending','no_tracks','login'):
+                                key=result.get('key') or {};self._metadata_key=(str(key.get('aid','')),str(key.get('cid','')))
+                            self.retry_recovery(message)
                     if not self._retry_at:self.timer.stop()
                     return
                 token=json.dumps(self._recovery_token)
@@ -331,7 +396,9 @@ class BilibiliSubtitleFeed(QObject):
         self._recovery_token=f'{self.epoch}-{self._attempts}-{now}'
         self._job=(self._recovery_token,self.epoch,self.signature(self._context),page_identity(self.source()))
         try:
-            self._recovery_task=self.browser.execute_script(RECOVERY_SCRIPT.replace('TOKEN',json.dumps(self._recovery_token)).replace('EXPECTED',json.dumps(self._job[3])))
+            script=RECOVERY_SCRIPT.replace('TOKEN',json.dumps(self._recovery_token)).replace('EXPECTED',json.dumps(self._job[3]))
+            script=script.replace('CAPTURED_RECORDS',json.dumps(self.captured_records(),ensure_ascii=True))
+            self._recovery_task=self.browser.execute_script(script)
             self._recovery_phase='begin';self.message=f'正在核对当前视频字幕（{self._attempts}/{self.MAX_ATTEMPTS}）'
         except Exception:self.cancel_recovery();self.retry_recovery('浏览器暂不可读')
 
@@ -343,4 +410,8 @@ class BilibiliSubtitleFeed(QObject):
         if not self.enabled or self._loaded_context!=self.signature(self._context) or self._loaded_page!=page_identity(self.source()):return []
         return self.timeline.direction_events(seconds,since)
     def close(self):
-        self.cancel_recovery();self.enabled=False;self._closed=True;self.timer.stop();self.core=None
+        self.cancel_recovery();self.enabled=False;self._closed=True;self.timer.stop();self.resource_timer.stop()
+        if self.core is not None and self._subscribed:
+            try:self.core.WebResourceResponseReceived-=self._resource_handler
+            except Exception:pass
+        self._subscribed=False;self._player_pending.clear();self._records.clear();self._record_times.clear();self.core=None

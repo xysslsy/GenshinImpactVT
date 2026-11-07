@@ -84,4 +84,50 @@ class RecoveryTests(unittest.TestCase):
         self.feed._attempts=3;self.feed._retry_at=0
         self.feed.set_context(dict(self.context,duration=100))
         self.assertEqual(self.feed._attempts,0);self.assertTrue(self.feed._retry_at)
+
+    def metadata(self,aid='123',cid='33'):
+        return {'code':0,'data':{'aid':aid,'cid':cid,'login_mid':'private-account',
+            'subtitle':{'subtitles':[{'id_str':'game-track','lan':'ai-zh',
+                'subtitle_url':'https://aisubtitle.hdslb.com/bfs/ai_subtitle/game.json'}]}}}
+
+    def test_native_record_requires_matching_request_and_body(self):
+        for aid,cid in [('456','33'),('123','44'),('','33'),('123','')]:
+            self.assertFalse(self.feed.store_player_record(self.metadata(aid,cid),'123','33'))
+        self.assertFalse(self.feed._records)
+        self.assertTrue(self.feed.store_player_record(self.metadata(),'123','33'))
+        self.assertNotIn('private-account',json.dumps(self.feed.captured_records()))
+        self.assertEqual(self.feed.captured_records()[0]['data']['subtitle']['subtitles'][0]['id_str'],'game-track')
+
+    def test_response_observer_ignores_legacy_and_lookalike_hosts(self):
+        from unittest.mock import Mock
+        response=SimpleNamespace(StatusCode=200,GetContentAsync=Mock(return_value=SimpleNamespace(IsCompleted=False)))
+        for url in ('https://api.bilibili.com/x/player/v2?aid=123&cid=33',
+                    'https://api.bilibili.com.evil.test/x/player/wbi/v2?aid=123&cid=33',
+                    'http://api.bilibili.com/x/player/wbi/v2?aid=123&cid=33'):
+            self.feed.on_resource(None,SimpleNamespace(Request=SimpleNamespace(Uri=url),Response=response))
+        response.GetContentAsync.assert_not_called()
+        self.feed.enabled=False
+        self.feed.on_resource(None,SimpleNamespace(Request=SimpleNamespace(Uri='https://api.bilibili.com/x/player/wbi/v2?aid=123&cid=33'),Response=response))
+        response.GetContentAsync.assert_called_once();self.assertEqual(len(self.feed._player_pending),1)
+        self.assertFalse(self.feed.timeline.cues)
+
+    def test_native_cache_bounded_and_long_paused_video_retained(self):
+        for cid in range(20):self.feed.store_player_record(self.metadata(cid=str(cid+1)),'123',str(cid+1))
+        self.assertEqual(len(self.feed.captured_records()),8)
+        self.assertNotIn(('123','1'),self.feed._records)
+        self.feed._record_times[('123','20')]=0
+        self.assertIn(self.feed._records[('123','20')],self.feed.captured_records())
+
+    def test_new_player_metadata_rearms_exhausted_pending_video(self):
+        self.feed._attempts=3;self.feed._retry_at=0;self.feed._metadata_key=('123','33')
+        self.feed.store_player_record(self.metadata(),'123','33')
+        self.assertEqual(self.feed._attempts,0);self.assertTrue(self.feed._retry_at)
+        self.feed._metadata_key=('123','33');self.feed._attempts=3
+        self.feed.store_player_record(self.metadata(),'123','33')
+        self.assertEqual(self.feed._attempts,3)  # Identical responses cannot cause a retry loop.
+
+    def test_recovery_has_no_legacy_endpoint_fallback(self):
+        from genshinimpactvt.bilibili_subtitles import RECOVERY_SCRIPT
+        self.assertNotIn('/x/player/v2',RECOVERY_SCRIPT)
+        self.assertIn('CAPTURED_RECORDS',RECOVERY_SCRIPT)
 if __name__=='__main__':unittest.main()

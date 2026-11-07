@@ -1,6 +1,7 @@
 /* Read normal platform captions using this WebView's session. No credential export. */
 (() => {
   const token = TOKEN, expected=EXPECTED;
+  const captured=CAPTURED_RECORDS;
   const snapshot=MEDIA_CONTEXT, initial=snapshot();
   const logical=()=>{const u=new URL(location.href);return [u.pathname.match(/\/video\/(BV[0-9A-Za-z]{10})(?:\/|$)/)?.[1]||u.searchParams.get('bvid'),Math.max(1,Number(u.searchParams.get('p')||1)),u.hostname==='player.bilibili.com'?(u.searchParams.get('cid')||''):''];};
   const context=()=>{const m=snapshot();return m?{document:m.document,media:m.media,src:m.src,player_cid:m.playerCid}:null;};
@@ -54,7 +55,7 @@
         cid = view.data?.pages?.find(item => Number(item.page) === page)?.cid;
       }
       if (!/^\d+$/.test(String(cid || ''))) throw new Error('identity');
-      const key={bvid,cid:String(cid),page};
+      const key={bvid,cid:String(cid),aid:String(aid),page};
       if(initial.playerCid&&initial.playerCid!==String(cid)){state.result=finish('waiting',{key});return;}
       const duration=Number(view.data?.pages?.find(item=>String(item.cid)===String(cid))?.duration||0);
       if(duration&&initial.duration&&Math.abs(initial.duration-duration)>Math.max(5,duration*.015)){state.result=finish('waiting',{key});return;}
@@ -64,12 +65,13 @@
       }).find(u => u && u.hostname==='api.bilibili.com' && u.pathname==='/x/player/wbi/v2' &&
         u.searchParams.get('cid')===String(cid) &&
         ((aid && u.searchParams.get('aid')===String(aid)) || u.searchParams.get('bvid')===bvid));
-      const ordinary = 'https://api.bilibili.com/x/player/v2?aid='+encodeURIComponent(aid)+'&cid='+encodeURIComponent(cid)+'&bvid='+encodeURIComponent(bvid);
-      let player;
-      if (observed) {
+      let player=captured.find(record=>String(record.data?.aid)===String(aid)&&String(record.data?.cid)===String(cid));
+      if (!player && observed) {
         try { player=await read(observed.href,'include'); } catch {}
       }
-      if (!player || player.code!==0) player=await read(ordinary,'include');
+      // The unsigned legacy endpoint was observed returning unrelated tracks with matching IDs.
+      // Never use it as a fallback. Only metadata actually offered to this player is eligible.
+      if(!player){state.result=finish('metadata_pending',{key,message:'等待播放器字幕信息，可在 B站播放器开启字幕后重试'});return;}
       if (player.code !== 0) { state.result=finish('platform',{key,message:'平台字幕信息暂不可读（'+player.code+'）'}); return; }
       if(String(player.data?.cid||'')!==String(cid)||(player.data?.aid&&String(player.data.aid)!==String(aid))||
           (player.data?.bvid&&player.data.bvid!==bvid))throw new Error('字幕接口返回了其他视频，已拒绝');
