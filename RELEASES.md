@@ -1,6 +1,6 @@
 # 发行文件
 
-当前本地仅保留 **v2.0.1**。2026-11-07 核对云端旧版备份后，旧 v1.3、v1.3.1 已移入回收站，桌面仅保留 v2.0.1 快捷方式；个人资料保留。
+当前本地仅保留 **v2.0.2**。旧版在云端 SHA-256 核对后移入回收站；桌面入口同步到 v2.0.2，个人资料保留。
 
 | 版本 | 本地是否保留 | 下载 | SHA-256 |
 | --- | --- | --- | --- |
@@ -15,10 +15,11 @@
 | v1.3 | cloud only | [GitHub](https://github.com/xysslsy/GenshinImpactVT/releases/download/v1.3/GenshinImpactVT-v1.3-windows-x64.zip) | `2645d3f29bf1331f720e61389ffb97d94a4a66ccd09b2a061095352956506673` |
 | v1.3.1 | cloud only | [GitHub](https://github.com/xysslsy/GenshinImpactVT/releases/download/v1.3.1/GenshinImpactVT-v1.3.1-windows-x64.zip) | `a36482edda036af3e30544a11d7ed6bee4b34a0588d0f7e189f94fbf3d130fdf` |
 | v2.0 | cloud only | [GitHub](https://github.com/xysslsy/GenshinImpactVT/releases/download/v2.0/GenshinImpactVT-v2.0-windows-x64.zip) | `19dd70f60a77b6004087ef331a7c369572a0bcaa10b63a111240c45de80bccbc` |
-| v2.0.1 | yes | [GitHub](https://github.com/xysslsy/GenshinImpactVT/releases/download/v2.0.1/GenshinImpactVT-v2.0.1-windows-x64.zip) | `1a866d5d1cfcb083890e57974bba52142233ac146f68730cb707fd9190e7c031` |
+| v2.0.1 | cloud only | [GitHub](https://github.com/xysslsy/GenshinImpactVT/releases/download/v2.0.1/GenshinImpactVT-v2.0.1-windows-x64.zip) | `1a866d5d1cfcb083890e57974bba52142233ac146f68730cb707fd9190e7c031` |
+| v2.0.2 | yes | [GitHub](https://github.com/xysslsy/GenshinImpactVT/releases/download/v2.0.2/GenshinImpactVT-v2.0.2-windows-x64.zip) | `b232c65a6ec2d7cdd425631736f648387aeee000ade58726057c7dad8f0371bd` |
 
-当前程序：`releases/v2.0.1/GenshinImpactVT/GenshinImpactVT.exe`。
+当前程序：`releases/v2.0.2/GenshinImpactVT/GenshinImpactVT.exe`。
 
-桌面仅保留 **GenshinImpactVT v2.0.1** 快捷方式。
+桌面仅保留 **GenshinImpactVT v2.0.2** 快捷方式。
 
-当前版卸载入口：设置页的“卸载此版本”，或 `releases/v2.0.1/GenshinImpactVT/Uninstall.exe`。卸载清单和助手从 v1.2 起提供。
+当前版卸载入口：设置页的“卸载此版本”，或 `releases/v2.0.2/GenshinImpactVT/Uninstall.exe`。卸载清单和助手从 v1.2 起提供。
