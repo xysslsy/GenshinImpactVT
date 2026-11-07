@@ -16,6 +16,7 @@ def main():
     settings=QSettings(str(data/'settings.ini'),QSettings.Format.IniFormat)
     for key in ('episode_keys/enabled','mouse/enabled','subtitles/enabled'):settings.setValue(key,False)
     settings.setValue('subtitles/mode','auto');settings.setValue('window/compact',False)
+    settings.setValue('subtitles/auto_on_video',False)  # This test deliberately exercises late manual enable.
     base='https://www.bilibili.com/video/BV1CMHQzsEJV/'
     settings.setValue('browser/last_url',base+'?p=3');settings.sync()
     ole=ctypes.OleDLL('ole32');ole.OleInitialize(None);app=QApplication([]);win=Main(data)

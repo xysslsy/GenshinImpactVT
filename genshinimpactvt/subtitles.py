@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QDialog
 from .ocr_engine import worker
 from .subtitle_text import DEFAULT_REGION, StableText, valid_region
 from .subtitle_ui import SubtitlePage, RegionDialog
-from .bilibili_subtitles import BilibiliSubtitleFeed, is_bilibili_page, official_player_url, MEDIA_CONTEXT
+from .bilibili_subtitles import BilibiliSubtitleFeed, is_bilibili_page, official_player_url, MEDIA_CONTEXT, page_identity
 
 
 # Query only active cues and *visible* rendered subtitles, never the transcript panel.
@@ -75,6 +75,12 @@ class SubtitleController(QObject):
         self.enabled = settings.value('subtitles/enabled', settings.value('compass/enabled', False, type=bool), type=bool)
         self.mode = settings.value('subtitles/mode', 'auto')
         if self.mode not in ('auto','dom','ocr'): self.mode = 'auto'
+        self.auto_on_video=settings.value('subtitles/auto_on_video',True,type=bool)
+        self._follow_key=None
+        self._follow_media_key=None
+        if self.auto_on_video:
+            self.mode='auto';self.enabled=True
+            settings.setValue('subtitles/mode','auto');settings.setValue('subtitles/enabled',True)
         self.ocr_available = not (Path(__file__).resolve().parents[1]/'assets'/'lightweight.flag').exists()
         if self.mode == 'ocr' and not self.ocr_available: self.mode = 'auto'
         self.interval = settings.value('subtitles/interval', 500, type=int)
@@ -82,6 +88,8 @@ class SubtitleController(QObject):
         try: self.region = valid_region(json.loads(settings.value('subtitles/region', 'null')))
         except (TypeError,ValueError): self.region = DEFAULT_REGION
         self.page = SubtitlePage(self.enabled,self.mode,self.interval,self.ocr_available)
+        self.page.auto_on_video.setChecked(self.auto_on_video)
+        self.page.auto_on_video.toggled.connect(self.set_auto_on_video)
         self.native_feed = BilibiliSubtitleFeed(browser,self)
         self.native_feed.set_enabled(self.enabled and self.mode == 'auto')
         self.page.enabled.toggled.connect(self.set_enabled)
@@ -106,11 +114,28 @@ class SubtitleController(QObject):
         self._worker_ready = False; self._worker_busy = False; self._worker_failed = False
         self._worker_started = 0.; self._job = None; self._token = 0
         self.samples = 0; self.last_latency_ms = None
-        browser.source_changed.connect(self.reset_timeline)
+        browser.source_changed.connect(self.on_source_changed)
         browser.loading.connect(self.reset_timeline)
         self.timer = QTimer(self); self.timer.timeout.connect(self.tick); self.timer.setInterval(300)
         self.native_feed.changed.connect(self.feed_state_changed)
         if self.enabled:self.timer.start()
+
+    def ensure_auto_mode(self):
+        self.page.mode.setCurrentIndex(self.page.mode.findData('auto'))
+        self.page.enabled.setChecked(True)
+        self.native_feed.set_enabled(True);self.timer.start()
+
+    def set_auto_on_video(self,enabled):
+        self.auto_on_video=bool(enabled);self.settings.setValue('subtitles/auto_on_video',self.auto_on_video)
+        if enabled:self.ensure_auto_mode()
+
+    def on_source_changed(self,url):
+        key=page_identity(url)
+        if key!=self._follow_key:
+            self._follow_key=key
+            self._follow_media_key=None
+            if key and self.auto_on_video:self.ensure_auto_mode()
+        self.reset_timeline()
 
     def feed_state_changed(self):
         if self.mode=='auto' and not self.native_feed.timeline.cues:
@@ -160,6 +185,7 @@ class SubtitleController(QObject):
         self.timer.start()
 
     def refresh_subtitles(self):
+        self.ensure_auto_mode()
         self.reset_timeline();self.native_feed.refresh()
         self.page.status.setText(self.native_feed.message)
 
@@ -284,6 +310,11 @@ class SubtitleController(QObject):
                     self._last_time,self._last_wall = metadata['time'],now
                     self._metadata = metadata
                     bili = metadata.get('bili') or {}
+                    media_key=(metadata.get('document'),str(metadata.get('player_cid'))) if metadata.get('player_cid') else None
+                    if media_key and media_key!=self._follow_media_key:
+                        previous=self._follow_media_key;self._follow_media_key=media_key
+                        if previous is not None and self.auto_on_video and is_bilibili_page(str(self.browser.web.Source)):
+                            self.ensure_auto_mode()
                     self.native_feed.set_context(metadata)
                     if metadata['seeking'] or metadata['ended']:
                         self.compass.clear(); self.gate.reset();self.publish_caption('','');self.page.text.setText('—')

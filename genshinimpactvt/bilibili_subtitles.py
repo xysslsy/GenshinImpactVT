@@ -176,6 +176,7 @@ def fetch_caption(url):
 class BilibiliSubtitleFeed(QObject):
     """One loader, one generation and one verified playback context. No response racing."""
     changed=Signal()
+    MAX_ATTEMPTS=3
 
     def __init__(self,browser,parent=None):
         super().__init__(parent);self.browser=browser;self.enabled=False;self.core=None
@@ -229,7 +230,13 @@ class BilibiliSubtitleFeed(QObject):
         if self._context and self.signature(self._context)!=signature:
             self.reset()
         self._context={k:metadata.get(k) for k in ('document','media','src','player_cid','duration','ready')}
+        if self._waiting_context is not None and self._waiting_context!=self.waiting_signature():
+            self._waiting_context=None;self._attempts=0
         self.request_recovery()
+
+    def waiting_signature(self):
+        context=self._context or {}
+        return (self.signature(context),context.get('ready'),round(float(context.get('duration') or 0),1))
 
     def set_video(self,bvid,cid):
         # Page globals are hints, never an authority capable of replacing a verified timeline.
@@ -245,8 +252,7 @@ class BilibiliSubtitleFeed(QObject):
     def request_recovery(self,immediate=False):
         if self._closed or not self.enabled or self.timeline.cues or self._recovery_task is not None:return
         if not page_identity(self.source()) or not self._context or not self.core:return
-        if (self._context.get('ready') or 0)<2 or self._attempts>=5:return
-        if self._waiting_context==self.signature(self._context):return
+        if (self._context.get('ready') or 0)<2 or self._attempts>=self.MAX_ATTEMPTS:return
         if not self._retry_at:self._retry_at=time.monotonic()+(0 if immediate else .1)
         self.timer.start()
 
@@ -257,10 +263,10 @@ class BilibiliSubtitleFeed(QObject):
 
     def retry_recovery(self,message):
         if self.timeline.cues:return
-        if self._attempts<5:
-            delay=(1.,2.,4.,8.)[max(0,self._attempts-1)]
+        if self._attempts<self.MAX_ATTEMPTS:
+            delay=(1.,3.)[max(0,self._attempts-1)]
             self._retry_at=time.monotonic()+delay
-            self.message=message+f'；{int(delay)} 秒后重试（{self._attempts}/5）'
+            self.message=message+f'；{int(delay)} 秒后重试（{self._attempts}/{self.MAX_ATTEMPTS}）'
             self.timer.start()
         else:self._retry_at=0.;self.message=message+'；请点“重试字幕”再次核对'
         self.changed.emit()
@@ -305,8 +311,8 @@ class BilibiliSubtitleFeed(QObject):
                     self.cancel_recovery()
                     if not accepted:
                         if status=='waiting':
-                            self._attempts=max(0,self._attempts-1);self._waiting_context=self.signature(self._context)
-                            self.message='等待播放器切到当前视频，暂不显示字幕'
+                            self._waiting_context=self.waiting_signature()
+                            self.retry_recovery('等待播放器切到当前视频，暂不显示字幕')
                         else:self.retry_recovery(message)
                     if not self._retry_at:self.timer.stop()
                     return
@@ -326,7 +332,7 @@ class BilibiliSubtitleFeed(QObject):
         self._job=(self._recovery_token,self.epoch,self.signature(self._context),page_identity(self.source()))
         try:
             self._recovery_task=self.browser.execute_script(RECOVERY_SCRIPT.replace('TOKEN',json.dumps(self._recovery_token)).replace('EXPECTED',json.dumps(self._job[3])))
-            self._recovery_phase='begin';self.message=f'正在核对当前视频字幕（{self._attempts}/5）'
+            self._recovery_phase='begin';self.message=f'正在核对当前视频字幕（{self._attempts}/{self.MAX_ATTEMPTS}）'
         except Exception:self.cancel_recovery();self.retry_recovery('浏览器暂不可读')
 
     def poll_recovery(self,now):self.poll()

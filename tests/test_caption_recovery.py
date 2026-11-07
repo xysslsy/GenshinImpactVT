@@ -66,9 +66,9 @@ class RecoveryTests(unittest.TestCase):
         result=self.success();result['caption']['body'][0]['to']=200
         with self.assertRaises(ValueError):self.feed.apply_recovery(result)
     def test_retry_budget_reset_on_new_page(self):
-        for attempt in range(1,6):
+        for attempt in range(1,4):
             self.feed._attempts=attempt;self.feed.retry_recovery('temporary')
-            self.assertEqual(bool(self.feed._retry_at),attempt<5)
+            self.assertEqual(bool(self.feed._retry_at),attempt<3)
         self.browser.web.Source=URL.replace('p=3','p=4');self.feed.on_source_changed(self.browser.web.Source)
         self.assertEqual(self.feed._attempts,0);self.assertFalse(self.feed.timer.isActive())
     def test_enabled_safe_before_browser_ready(self):
@@ -78,4 +78,10 @@ class RecoveryTests(unittest.TestCase):
         self.job();self.feed.close();self.assertIsNone(self.feed._job);self.assertFalse(self.feed.timer.isActive())
     def test_tracking_ignored(self):
         self.assertEqual(page_identity(URL),page_identity(URL+'&spm_id_from=test'))
+    def test_waiting_duration_change_rearms_exhausted_attempts(self):
+        self.feed._context['duration']=0
+        self.feed._waiting_context=self.feed.waiting_signature()
+        self.feed._attempts=3;self.feed._retry_at=0
+        self.feed.set_context(dict(self.context,duration=100))
+        self.assertEqual(self.feed._attempts,0);self.assertTrue(self.feed._retry_at)
 if __name__=='__main__':unittest.main()

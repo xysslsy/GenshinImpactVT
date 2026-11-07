@@ -73,6 +73,8 @@ class SubtitlePage(QWidget):
         note = QLabel('按当前播放实例核对 B站中文字幕，再按时间轴提醒方向。字幕不匹配时不显示旧结果。')
         note.setWordWrap(True); box.addWidget(note)
         self.enabled = QCheckBox('启用字幕识别与方向提醒'); self.enabled.setChecked(enabled); box.addWidget(self.enabled)
+        self.auto_on_video=QCheckBox('启动及新视频自动启用自动模式（失败时最多尝试 3 次）')
+        self.auto_on_video.setChecked(True);box.addWidget(self.auto_on_video)
         self.show_footer=QCheckBox('在视频内显示透明字幕');self.show_footer.setChecked(True);box.addWidget(self.show_footer)
         self.mode = QComboBox()
         modes = [('自动：校验当前视频的 B站中文字幕', 'auto'), ('手动：仅使用当前播放器显示的字幕', 'dom')]
@@ -83,7 +85,7 @@ class SubtitlePage(QWidget):
         row = QHBoxLayout()
         self.pick = QPushButton('框选字幕区域'); self.reset = QPushButton('恢复默认区域'); self.show_compass = QPushButton('显示方向浮窗')
         row.addWidget(self.pick); row.addWidget(self.reset); row.addWidget(self.show_compass); box.addLayout(row)
-        self.refresh = QPushButton('重试字幕（不刷新视频）'); box.addWidget(self.refresh)
+        self.refresh = QPushButton('重新自动读取字幕（不刷新视频）'); box.addWidget(self.refresh)
         player_row=QHBoxLayout()
         self.player=QPushButton('打开官方纯播放器');self.full_page=QPushButton('返回完整 B站网页')
         player_row.addWidget(self.player);player_row.addWidget(self.full_page);box.addLayout(player_row)
@@ -110,7 +112,7 @@ class SubtitlePage(QWidget):
         ocr = self.mode.currentData() == 'ocr'
         for widget in (self.pick,self.reset,self.interval,self.demo,self.preview_title,self.preview):
             widget.setVisible(ocr)
-        self.refresh.setVisible(self.mode.currentData() != 'ocr')
+        self.refresh.setVisible(True)
 
     def set_preview(self, image):
         self.preview.setPixmap(QPixmap.fromImage(image).scaled(640, 120,
