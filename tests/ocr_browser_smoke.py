@@ -67,7 +67,7 @@ def main():
             stage=2;stage_start=now
         elif stage==2 and win.compass.active=={'西','南'}:
             check('resize_and_southwest',True)
-            win.select(service.page_index)
+            win.show_settings_section('subtitles')
             win.browser.execute_script("window.caption='捡起这个东西'");stage=3;stage_start=now
         elif stage==3 and '东西' in service.page.text.text() and not win.compass.active:
             check('non_direction_filtered',True)

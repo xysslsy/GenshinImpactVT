@@ -10,7 +10,7 @@ def setup_test(window,result,url,finish):
     service=window.subtitles
     service.page.mode.setCurrentIndex(service.page.mode.findData('auto'))
     service.page.enabled.setChecked(True)
-    service.page.show_compass.click()
+    window.show_compass()
     window.episode_toggle.setChecked(False);window.mouse_toggle.setChecked(False)
     window.browser.ready.connect(lambda:QTimer.singleShot(400,lambda:window.open_url(url)))
     state={'target':None}

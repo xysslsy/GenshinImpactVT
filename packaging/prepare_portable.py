@@ -19,6 +19,7 @@ def main():
     parser.add_argument('--dist',type=Path,required=True)
     parser.add_argument('--helper',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--description', default='Windows x64 portable build')
     args=parser.parse_args()
     source=args.dist.resolve();helper=args.helper.resolve();output=args.output.absolute()
     if not (source/(APP_NAME+'.exe')).is_file() or not helper.is_file():
@@ -48,7 +49,7 @@ def main():
         assert archive.testzip() is None
     sha=digest(package)
     record={'version':DISPLAY_VERSION,'file':DISPLAY_VERSION+'/'+package.name,
-            'description':'Player-response subtitle provenance; remove unrelated legacy caption fallback',
+            'description':args.description,
             'sha256':sha,'size_bytes':package.stat().st_size,'local_available':True,
             'download_url':f'https://github.com/xysslsy/GenshinImpactVT/releases/download/{DISPLAY_VERSION}/{package.name}'}
     (output/'release-record.json').write_text(json.dumps(record,indent=2),encoding='utf-8')

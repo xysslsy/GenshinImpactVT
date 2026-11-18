@@ -21,6 +21,8 @@ def main():
     settings=QSettings(str(DATA/'app/settings.ini'),QSettings.Format.IniFormat);settings.clear()
     settings.setValue('browser/last_url','');settings.setValue('mouse/enabled',False)
     settings.setValue('episode_keys/enabled',True);settings.setValue('subtitles/enabled',False)
+    # This test injects its own subtitle cues after seeking to the end of the video.
+    settings.setValue('subtitles/auto_on_video',False)
     settings.setValue('window/compact',True);settings.sync()
     ole=ctypes.OleDLL('ole32');ole.OleInitialize(None)
     app=QApplication([]);app.setStyleSheet(STYLE);win=Main(DATA/'app')

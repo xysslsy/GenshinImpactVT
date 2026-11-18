@@ -1,8 +1,10 @@
 """Subtitle controls and an image-based region picker (no desktop capture)."""
 from PySide6.QtCore import Qt, QRectF, QPointF, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox,
-    QComboBox, QPushButton, QDialog, QDialogButtonBox)
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QCheckBox,
+    QComboBox, QPushButton, QDialog, QDialogButtonBox, QSpinBox)
+from .desktop_subtitle import DesktopSubtitle
+from .settings_ui import SettingsCard, SettingsDisclosure, SettingsSection, setting_note, settings_form, slider_spin_field
 from .subtitle_text import DEFAULT_REGION, valid_region
 
 
@@ -65,54 +67,83 @@ class RegionDialog(QDialog):
         buttons.accepted.connect(self.accept); buttons.rejected.connect(self.reject); box.addWidget(buttons)
 
 
-class SubtitlePage(QWidget):
+class SubtitlePage(SettingsSection):
     def __init__(self, enabled, mode, interval, ocr_available=True):
         super().__init__()
-        box = QVBoxLayout(self); box.setContentsMargins(32,24,32,24); box.setSpacing(12)
-        title = QLabel('字幕识别'); title.setObjectName('heading'); box.addWidget(title)
-        note = QLabel('按当前播放实例核对 B站中文字幕，再按时间轴提醒方向。字幕不匹配时不显示旧结果。')
-        note.setWordWrap(True); box.addWidget(note)
-        self.enabled = QCheckBox('启用字幕识别与方向提醒'); self.enabled.setChecked(enabled); box.addWidget(self.enabled)
-        self.auto_on_video=QCheckBox('启动及新视频自动启用自动模式（失败时最多尝试 3 次）')
-        self.auto_on_video.setChecked(True);box.addWidget(self.auto_on_video)
-        self.show_footer=QCheckBox('在视频内显示透明字幕');self.show_footer.setChecked(True);box.addWidget(self.show_footer)
+        regular = SettingsCard('字幕与方向')
+        self.enabled = QCheckBox('启用字幕识别与方向提醒')
+        self.enabled.setChecked(enabled)
+        self.show_footer = QCheckBox('在视频内显示字幕')
+        self.show_footer.setChecked(True)
+        self.show_desktop = QCheckBox('在屏幕底部显示字幕')
+        self.show_desktop.setToolTip('字幕独立于视频窗口显示，鼠标可穿过字幕。')
+        self.desktop_font_size = QSpinBox()
+        self.desktop_font_size.setRange(DesktopSubtitle.MIN_FONT_SIZE, DesktopSubtitle.MAX_FONT_SIZE)
+        self.desktop_font_size.setValue(DesktopSubtitle.DEFAULT_FONT_SIZE)
+        self.desktop_font_size.setSuffix(' px')
+        self.desktop_size_field = slider_spin_field(self.desktop_font_size, '屏幕字幕大小')
+        self.refresh = QPushButton('重新读取字幕')
+        self.refresh.setToolTip('切回自动识别，保持当前视频和播放位置。')
+        regular.form.addRow(self.enabled)
+        regular.form.addRow(self.show_footer)
+        regular.form.addRow(self.show_desktop)
+        regular.form.addRow('屏幕字幕大小', self.desktop_size_field)
+        regular.form.addRow(self.refresh)
+
+        current = SettingsCard('当前识别')
+        self.status = setting_note('正在等待视频…' if enabled else '字幕识别已关闭')
+        self.text = QLabel('—')
+        self.text.setWordWrap(True)
+        self.text.setTextFormat(Qt.TextFormat.PlainText)
+        self.text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        current.form.addRow(self.status)
+        current.form.addRow(self.text)
+
+        advanced = SettingsCard('')
+        self.auto_on_video = QCheckBox('启动和切视频时自动识别')
+        self.auto_on_video.setChecked(True)
+        self.auto_on_video.setToolTip('每轮最多尝试 3 次。关闭后保留手动选择的模式。')
         self.mode = QComboBox()
-        modes = [('自动：校验当前视频的 B站中文字幕', 'auto'), ('手动：仅使用当前播放器显示的字幕', 'dom')]
-        if ocr_available: modes.append(('高级：手动开启画面字幕 OCR', 'ocr'))
+        modes = [('自动 · B站中文字幕', 'auto'), ('手动 · 网页字幕', 'dom')]
+        if ocr_available:
+            modes.append(('手动 · 画面 OCR', 'ocr'))
         for title, value in modes:
             self.mode.addItem(title, value)
-        self.mode.setCurrentIndex(max(0, self.mode.findData(mode))); box.addWidget(self.mode)
-        row = QHBoxLayout()
-        self.pick = QPushButton('框选字幕区域'); self.reset = QPushButton('恢复默认区域'); self.show_compass = QPushButton('显示方向浮窗')
-        row.addWidget(self.pick); row.addWidget(self.reset); row.addWidget(self.show_compass); box.addLayout(row)
-        self.refresh = QPushButton('重新自动读取字幕（不刷新视频）'); box.addWidget(self.refresh)
-        player_row=QHBoxLayout()
-        self.player=QPushButton('打开官方纯播放器');self.full_page=QPushButton('返回完整 B站网页')
-        player_row.addWidget(self.player);player_row.addWidget(self.full_page);box.addLayout(player_row)
+        self.mode.setCurrentIndex(max(0, self.mode.findData(mode)))
+        self.player = QPushButton('打开纯播放器')
+        self.full_page = QPushButton('返回完整网页')
+        advanced.form.addRow(self.auto_on_video)
+        advanced.form.addRow('识别方式', self.mode)
+        advanced.form.addRow('B站播放器', self.player)
+        advanced.form.addRow('', self.full_page)
+
+        self.ocr_options = QWidget()
+        ocr_form = settings_form()
+        self.ocr_options.setLayout(ocr_form)
+        self.pick = QPushButton('框选字幕区域')
+        self.reset = QPushButton('恢复默认区域')
         self.interval = QComboBox()
-        for title,value in [('省电 · 每秒约 1 次', 1000), ('均衡 · 每秒约 2 次', 500), ('灵敏 · 每秒约 3 次', 350)]:
+        for title, value in [('省电 · 每秒约 1 次', 1000), ('均衡 · 每秒约 2 次', 500), ('灵敏 · 每秒约 3 次', 350)]:
             self.interval.addItem(title, value)
-        self.interval.setCurrentIndex(max(0, self.interval.findData(interval))); box.addWidget(self.interval)
-        self.demo = QPushButton('打开本地识别示例'); box.addWidget(self.demo)
-        self.status = QLabel('字幕识别已关闭'); self.status.setWordWrap(True); box.addWidget(self.status)
-        self.status.setTextFormat(Qt.TextFormat.PlainText)
-        label = QLabel('最近识别文字'); label.setObjectName('muted'); box.addWidget(label)
-        self.text = QLabel('—'); self.text.setWordWrap(True); self.text.setMinimumHeight(45)
-        self.text.setTextFormat(Qt.TextFormat.PlainText)
-        self.text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse); box.addWidget(self.text)
-        label = QLabel('最近一次字幕区域（仅用于画面 OCR）'); self.preview_title=label; label.setObjectName('muted'); box.addWidget(label)
-        self.preview = QLabel('开启视频后可框选字幕区域'); self.preview.setMinimumHeight(80)
-        self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter); box.addWidget(self.preview)
-        hint = QLabel('请在软件内正常登录 B站。平台未提供字幕时会提示。自动模式不会用未验证的网页文字替代字幕；同一句内多个顺序方向按文字比例近似推进。')
-        hint.setWordWrap(True); hint.setObjectName('muted'); box.addWidget(hint); box.addStretch()
+        self.interval.setCurrentIndex(max(0, self.interval.findData(interval)))
+        self.demo = QPushButton('打开识别示例')
+        self.preview = setting_note('开启视频后可框选字幕区域。')
+        self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ocr_form.addRow('字幕区域', self.pick)
+        ocr_form.addRow('', self.reset)
+        ocr_form.addRow('识别频率', self.interval)
+        ocr_form.addRow(self.demo)
+        ocr_form.addRow(self.preview)
+        advanced.form.addRow(self.ocr_options)
+        self.advanced = SettingsDisclosure('高级设置 · 普通用户可忽略', advanced)
+        self.add(regular)
+        self.add(current)
+        self.add(self.advanced)
         self.mode.currentIndexChanged.connect(self.update_mode)
         self.update_mode()
 
     def update_mode(self):
-        ocr = self.mode.currentData() == 'ocr'
-        for widget in (self.pick,self.reset,self.interval,self.demo,self.preview_title,self.preview):
-            widget.setVisible(ocr)
-        self.refresh.setVisible(True)
+        self.ocr_options.setVisible(self.mode.currentData() == 'ocr')
 
     def set_preview(self, image):
         self.preview.setPixmap(QPixmap.fromImage(image).scaled(640, 120,

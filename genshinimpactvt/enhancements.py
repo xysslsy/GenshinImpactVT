@@ -1,21 +1,171 @@
 """Bilibili playback, user-configurable hotkeys and subtitle direction overlay."""
 import json
+from pathlib import Path
+import sys
 from urllib.parse import urlsplit
 from ctypes import wintypes
 
-from PySide6.QtCore import Qt, QTimer, QPoint
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QCheckBox, QColorDialog, QComboBox, QLabel, QPushButton, QScrollArea, QSlider, QSpinBox
+from PySide6.QtWidgets import QCheckBox, QColorDialog, QComboBox, QLabel, QPushButton, QSlider, QSpinBox
 
 from .browser import user32
 from .compass import Compass
+from .desktop_subtitle import DesktopSubtitle
 from .mouse_buttons import SideButtons
 from .raw_mouse import RawMouse
+from .settings_ui import SettingsCard, SettingsDisclosure, SettingsSection, setting_note, slider_field, slider_spin_field
 from .shortcuts import Shortcuts
 from .window_controls import WindowControls
 from .window_opacity import WindowOpacity
 from .subtitles import SubtitleController
 from .bilibili_subtitles import official_episode_url
+from .uninstaller import HELPER, MARKER
+
+
+def make_window_settings(window):
+    section = SettingsSection()
+    window_card = SettingsCard('窗口')
+    window.window_opacity = WindowOpacity(window)
+    window.opacity_label = QLabel(f'{window.window_opacity.percent}%')
+    window.opacity_slider = QSlider(Qt.Orientation.Horizontal)
+    window.opacity_slider.setRange(20, 100)
+    window.opacity_slider.setValue(window.window_opacity.percent)
+    window.opacity_slider.valueChanged.connect(window.window_opacity.set_percent)
+
+    def update_opacity(percent):
+        window.opacity_slider.blockSignals(True)
+        window.opacity_slider.setValue(percent)
+        window.opacity_slider.blockSignals(False)
+        window.opacity_label.setText(f'{percent}%')
+
+    window.window_opacity.changed.connect(update_opacity)
+    window_card.form.addRow('不透明度', slider_field(window.opacity_slider, window.opacity_label))
+
+    compass = window.compass = Compass()
+    color = QColor(window.settings.value('compass/color', compass.color.name()))
+    if color.isValid():
+        compass.color = color
+    float_card = SettingsCard('方向浮窗')
+    window.compass_toggle = QCheckBox('显示方向浮窗')
+    window.compass_toggle.setChecked(window.settings.value('compass/enabled', True, type=bool))
+    window.compass_toggle.toggled.connect(window.set_compass)
+    float_card.form.addRow(window.compass_toggle)
+    float_card.form.addRow(setting_note('默认在屏幕左上角，拖动方位文字可移动。'))
+
+    color_button = QPushButton('选择颜色')
+    color_button.clicked.connect(window.choose_compass_color)
+    float_card.form.addRow('高亮颜色', color_button)
+
+    window.glow_strength = QSlider(Qt.Orientation.Horizontal)
+    window.glow_strength.setRange(15, 100)
+    window.glow_strength.setValue(window.settings.value('compass/glow_strength', 75, type=int))
+    compass.set_strength(window.glow_strength.value())
+    strength_value = QLabel(f'{window.glow_strength.value()}%')
+
+    def update_strength(percent):
+        compass.set_strength(percent)
+        strength_value.setText(f'{percent}%')
+        window.settings.setValue('compass/glow_strength', percent)
+
+    window.glow_strength.valueChanged.connect(update_strength)
+    float_card.form.addRow('高亮强度', slider_field(window.glow_strength, strength_value))
+
+    window.glow_size = QSpinBox()
+    window.glow_size.setRange(140, 420)
+    window.glow_size.setSuffix(' px')
+    window.glow_size.setValue(window.settings.value('compass/glow_size', 240, type=int))
+    compass.set_extent(window.glow_size.value())
+    window.glow_size.valueChanged.connect(compass.set_extent)
+    window.glow_size.valueChanged.connect(lambda size: window.settings.setValue('compass/glow_size', size))
+    float_card.form.addRow('浮窗大小', slider_spin_field(window.glow_size, '浮窗大小'))
+
+    window.glow_duration = QSpinBox()
+    window.glow_duration.setRange(1, 30)
+    window.glow_duration.setSuffix(' 秒')
+    window.glow_duration.setValue(window.settings.value('compass/hold_seconds', 5, type=int))
+    compass.set_hold_seconds(window.glow_duration.value())
+    window.glow_duration.valueChanged.connect(compass.set_hold_seconds)
+    window.glow_duration.valueChanged.connect(lambda seconds: window.settings.setValue('compass/hold_seconds', seconds))
+    float_card.form.addRow('提示时长', window.glow_duration)
+
+    advanced = SettingsCard('')
+    glow = QCheckBox('显示柔光刻线和方向箭头')
+    glow.setChecked(window.settings.value('compass/glow_enabled', True, type=bool))
+    compass.set_glow_enabled(glow.isChecked())
+    glow.toggled.connect(compass.set_glow_enabled)
+    glow.toggled.connect(lambda enabled: window.settings.setValue('compass/glow_enabled', enabled))
+    advanced.form.addRow(glow)
+    window.uninstall_button = QPushButton('卸载此版本…')
+    window.uninstall_button.clicked.connect(window.request_uninstall)
+    install_root = Path(sys.executable).parent
+    window.uninstall_button.setEnabled(bool(getattr(sys, 'frozen', False)) and
+                                       (install_root / MARKER).is_file() and (install_root / HELPER).is_file())
+    window.uninstall_button.setToolTip('卸载便携版；默认保留个人资料。开发源码不提供卸载。')
+    advanced.form.addRow('软件管理', window.uninstall_button)
+    section.add(window_card)
+    section.add(float_card)
+    section.add(SettingsDisclosure('高级设置 · 普通用户可忽略', advanced))
+    return section
+
+
+def make_shortcut_settings(window):
+    section = SettingsSection()
+    switches = SettingsCard('键盘与鼠标')
+    window.episode_toggle = QCheckBox('启用键盘快捷键')
+    window.episode_toggle.setChecked(window.settings.value('episode_keys/enabled', True, type=bool))
+    window.mouse_toggle = QCheckBox('启用鼠标侧键')
+    window.mouse_toggle.setChecked(window.settings.value('mouse/enabled', True, type=bool))
+    switches.form.addRow(window.episode_toggle)
+    switches.form.addRow(window.mouse_toggle)
+
+    advanced = SettingsCard('')
+    window.episode_mode = QComboBox()
+    window.episode_mode.addItem('普通监听', 'hook')
+    window.episode_mode.addItem('系统全局热键', 'system')
+    window.episode_mode.setToolTip('普通监听保留原按键，系统全局热键会占用所设按键。')
+    selected = window.episode_mode.findData(window.settings.value('episode_keys/mode', 'hook'))
+    window.episode_mode.setCurrentIndex(max(0, selected))
+    window.episode_status = setting_note('')
+    advanced.form.addRow('键盘监听方式', window.episode_mode)
+    advanced.form.addRow(window.episode_status)
+
+    window.mouse_mode = QComboBox()
+    window.mouse_mode.addItem('后台原始输入', 'raw')
+    window.mouse_mode.addItem('普通侧键监听', 'hook')
+    selected = window.mouse_mode.findData(window.settings.value('mouse/mode', 'raw'))
+    window.mouse_mode.setCurrentIndex(max(0, selected))
+    window.mouse_count = 0
+    window.mouse_status = setting_note('侧键状态：尚未检测到按键（计数 0）')
+    injected = QCheckBox('普通监听时接受鼠标模拟侧键')
+    injected.setChecked(window.settings.value('mouse/allow_injected', False, type=bool))
+    advanced.form.addRow('鼠标监听方式', window.mouse_mode)
+    advanced.form.addRow(injected)
+    advanced.form.addRow(window.mouse_status)
+
+    window.shortcuts = Shortcuts(window)
+    window.episode_keys = window.shortcuts.hook
+    window.system_episode_keys = window.shortcuts.system
+    window.episode_mode.currentIndexChanged.connect(window.change_episode_mode)
+    window.episode_toggle.toggled.connect(window.set_episode_keys)
+    window.shortcuts.start()
+    window.side_buttons = SideButtons(window)
+    window.raw_mouse = RawMouse(int(window.winId()), window)
+    for listener in (window.side_buttons, window.raw_mouse):
+        listener.pressed.connect(window.side_button, Qt.ConnectionType.QueuedConnection)
+        listener.observed.connect(window.mouse_observed, Qt.ConnectionType.QueuedConnection)
+    window.side_buttons.allow_injected = injected.isChecked()
+    injected.toggled.connect(window.set_injected_enabled)
+    window.mouse_toggle.toggled.connect(window.set_mouse_enabled)
+    window.mouse_mode.currentIndexChanged.connect(window.change_mouse_mode)
+    if window.mouse_toggle.isChecked() and not window.current_mouse().start():
+        window.mouse_toggle.setChecked(False)
+        window.status.setText('鼠标侧键监听启动失败，请检查设置。')
+
+    section.add(switches)
+    section.add(window.shortcuts.page)
+    section.add(SettingsDisclosure('高级设置 · 普通用户可忽略', advanced))
+    return section
 
 def on_bilibili(self):
     host = (urlsplit(self.address.text()).hostname or '').lower()
@@ -27,109 +177,49 @@ def install(cls):
     def initialize(self, *args, **kwargs):
         old_init(self, *args, **kwargs)
         self.immersive = False
-        self.compass = Compass(); color = QColor(self.settings.value('compass/color', '#4080ff'))
-        if color.isValid(): self.compass.color = color
-        page = self.stack.widget(3); box = page.layout()
-        episode_toggle = QCheckBox('启用全局键盘快捷键'); self.episode_toggle = episode_toggle
-        episode_toggle.setChecked(self.settings.value('episode_keys/enabled', True, type=bool))
-        box.insertWidget(box.count()-1, episode_toggle)
-        self.episode_mode = QComboBox()
-        self.episode_mode.addItem('普通监听（保留按键原有功能）', 'hook')
-        self.episode_mode.addItem('系统全局热键（占用所设按键）', 'system')
-        self.episode_mode.setCurrentIndex(max(0,self.episode_mode.findData(self.settings.value('episode_keys/mode','hook'))))
-        box.insertWidget(box.count()-1,self.episode_mode)
-        self.episode_status = QLabel(''); self.episode_status.setWordWrap(True)
-        box.insertWidget(box.count()-1,self.episode_status)
-        self.shortcuts = Shortcuts(self)
-        self.episode_keys = self.shortcuts.hook; self.system_episode_keys = self.shortcuts.system
-        box.insertWidget(box.count()-1,self.shortcuts.page)
-        self.episode_mode.currentIndexChanged.connect(self.change_episode_mode)
-        episode_toggle.toggled.connect(self.set_episode_keys)
-        self.shortcuts.start()
-        self.window_opacity=WindowOpacity(self)
-        self.opacity_label=QLabel(f'窗口不透明度：{self.window_opacity.percent}%')
-        box.insertWidget(box.count()-1,self.opacity_label)
-        self.opacity_slider=QSlider(Qt.Orientation.Horizontal);self.opacity_slider.setRange(20,100)
-        self.opacity_slider.setValue(self.window_opacity.percent)
-        self.opacity_slider.valueChanged.connect(self.window_opacity.set_percent)
-        box.insertWidget(box.count()-1,self.opacity_slider)
-        def opacity_changed(value):
-            self.opacity_slider.blockSignals(True);self.opacity_slider.setValue(value);self.opacity_slider.blockSignals(False)
-            self.opacity_label.setText(f'窗口不透明度：{value}%（默认 F2 更透明 / F3 更不透明 / F4 还原，可自定义）')
-        self.window_opacity.changed.connect(opacity_changed)
-        toggle = QCheckBox('启用字幕方向浮窗（拖动文字调整位置）'); self.compass_toggle = toggle; toggle.setChecked(self.settings.value('compass/enabled', False, type=bool)); toggle.toggled.connect(self.set_compass); box.insertWidget(box.count()-1, toggle)
-        color_button = QPushButton('选择方向高亮颜色'); color_button.clicked.connect(self.choose_compass_color); box.insertWidget(box.count()-1, color_button)
-        ambient=QCheckBox('圆周边缘高亮（东北等斜向只亮对应弧带）')
-        ambient.setChecked(self.settings.value('compass/glow_enabled',True,type=bool))
-        self.compass.set_glow_enabled(ambient.isChecked());box.insertWidget(box.count()-1,ambient)
-        ambient.toggled.connect(lambda value:(self.compass.set_glow_enabled(value),self.settings.setValue('compass/glow_enabled',value)))
-        glow_note=QLabel('在对应方位的圆周边缘显示柔和高亮带，中心透明；拖动和缩放方向浮窗，使圆周对准游戏小地图。')
-        glow_note.setWordWrap(True);box.insertWidget(box.count()-1,glow_note)
-        box.insertWidget(box.count()-1,QLabel('氛围光强度'))
-        self.glow_strength=QSlider(Qt.Orientation.Horizontal);self.glow_strength.setRange(15,100)
-        self.glow_strength.setValue(self.settings.value('compass/glow_strength',75,type=int))
-        self.compass.set_strength(self.glow_strength.value());box.insertWidget(box.count()-1,self.glow_strength)
-        self.glow_strength.valueChanged.connect(lambda value:(self.compass.set_strength(value),self.settings.setValue('compass/glow_strength',value)))
-        self.glow_size=QSpinBox();self.glow_size.setRange(140,420);self.glow_size.setSuffix(' px · 方向浮窗大小')
-        self.glow_size.setValue(self.settings.value('compass/glow_size',240,type=int))
-        self.compass.set_extent(self.glow_size.value());box.insertWidget(box.count()-1,self.glow_size)
-        self.glow_size.valueChanged.connect(lambda value:(self.compass.set_extent(value),self.settings.setValue('compass/glow_size',value)))
-        self.glow_duration = QSpinBox(); self.glow_duration.setRange(1,30); self.glow_duration.setSuffix(' 秒 · 方向高亮保持时间')
-        self.glow_duration.setValue(self.settings.value('compass/hold_seconds',5,type=int))
-        self.compass.set_hold_seconds(self.glow_duration.value()); box.insertWidget(box.count()-1,self.glow_duration)
-        self.glow_duration.valueChanged.connect(lambda value:(self.compass.set_hold_seconds(value),self.settings.setValue('compass/hold_seconds',value)))
-        mouse = QCheckBox('启用鼠标侧键（动作在自定义快捷键中设置）'); self.mouse_toggle = mouse; mouse.setChecked(self.settings.value('mouse/enabled', True, type=bool)); box.insertWidget(box.count()-1, mouse)
-        mouse_note = QLabel('同时保留鼠标原有功能；某些游戏或鼠标驱动可能接管侧键。'); mouse_note.setWordWrap(True); box.insertWidget(box.count()-1, mouse_note)
-        self.side_buttons = SideButtons(self); self.side_buttons.pressed.connect(self.side_button, Qt.ConnectionType.QueuedConnection)
-        self.raw_mouse = RawMouse(int(self.winId()), self); self.raw_mouse.pressed.connect(self.side_button, Qt.ConnectionType.QueuedConnection)
-        self.mouse_count = 0
-        self.mouse_status = QLabel('侧键状态：尚未检测到按键（计数 0）'); self.mouse_status.setWordWrap(True); box.insertWidget(box.count()-1, self.mouse_status)
-        self.side_buttons.observed.connect(self.mouse_observed, Qt.ConnectionType.QueuedConnection)
-        self.raw_mouse.observed.connect(self.mouse_observed, Qt.ConnectionType.QueuedConnection)
-        self.mouse_mode = QComboBox(); self.mouse_mode.addItem('后台原始输入（适用于部分游戏）', 'raw'); self.mouse_mode.addItem('普通侧键监听', 'hook')
-        selected = self.mouse_mode.findData(self.settings.value('mouse/mode', 'raw'))
-        self.mouse_mode.setCurrentIndex(max(0, selected)); box.insertWidget(box.count()-1, self.mouse_mode)
-        injected = QCheckBox('普通监听：接受鼠标驱动产生的模拟侧键'); injected.setChecked(self.settings.value('mouse/allow_injected', False, type=bool)); box.insertWidget(box.count()-1, injected)
-        self.side_buttons.allow_injected = injected.isChecked()
-        injected.toggled.connect(self.set_injected_enabled)
-        mouse.toggled.connect(self.set_mouse_enabled)
-        self.mouse_mode.currentIndexChanged.connect(self.change_mouse_mode)
-        if mouse.isChecked() and not self.current_mouse().start():
-            mouse.setChecked(False); self.status.setText('鼠标侧键监听启动失败，请检查设置。')
-        box.insertWidget(box.count()-1,QLabel('软件管理'))
-        self.uninstall_button = QPushButton('卸载此版本…')
-        self.uninstall_button.clicked.connect(self.request_uninstall)
-        import sys
-        from pathlib import Path
-        from .uninstaller import MARKER, HELPER
-        install_root = Path(sys.executable).parent
-        self.uninstall_button.setEnabled(bool(getattr(sys,'frozen',False)) and (install_root/MARKER).is_file() and (install_root/HELPER).is_file())
-        self.uninstall_button.setToolTip('卸载便携版；默认保留个人资料。开发源码不提供卸载。')
-        box.insertWidget(box.count()-1,self.uninstall_button)
-        scroll = QScrollArea(); scroll.setWidgetResizable(True); self.stack.removeWidget(page); scroll.setWidget(page); self.stack.insertWidget(3, scroll)
-        browser_page = self.stack.widget(0); bottom = browser_page.layout().itemAt(2).layout()
-        compact = QPushButton('小窗观看'); compact.clicked.connect(self.enter_mini_player); bottom.addWidget(compact)
-        show_compass = QPushButton('显示方向浮窗'); show_compass.clicked.connect(self.show_compass); bottom.addWidget(show_compass)
-        if toggle.isChecked():
-            pos = self.settings.value('compass/position')
-            if pos is not None: self.compass.move(pos)
-            self.compass.show()
-        self.subtitles = SubtitleController(self.browser,self.compass,self.settings,self)
+        self.settings_view.add_section('window', '窗口与浮窗', make_window_settings(self))
+
+        self.subtitles = SubtitleController(self.browser, self.compass, self.settings, self)
         self.subtitles.caption_changed.connect(self.subtitle_overlay.set_caption)
         self.subtitles.enabled_changed.connect(self.subtitle_overlay.set_recognition_enabled)
         self.subtitle_overlay.set_recognition_enabled(self.subtitles.enabled)
-        footer=self.subtitles.page.show_footer
-        footer.setChecked(self.settings.value('subtitles/show_footer',True,type=bool))
+        self.desktop_subtitle = DesktopSubtitle(self)
+        self.subtitles.caption_changed.connect(self.desktop_subtitle.set_caption)
+        self.subtitles.enabled_changed.connect(self.desktop_subtitle.set_recognition_enabled)
+        self.desktop_subtitle.set_recognition_enabled(self.subtitles.enabled)
+        footer = self.subtitles.page.show_footer
+        footer.setChecked(self.settings.value('subtitles/show_footer', True, type=bool))
         self.subtitle_overlay.set_visible(footer.isChecked())
-        footer.toggled.connect(lambda visible:(self.subtitle_overlay.set_visible(visible),self.settings.setValue('subtitles/show_footer',visible)))
-        subtitle_scroll = QScrollArea(); subtitle_scroll.setWidgetResizable(True); subtitle_scroll.setWidget(self.subtitles.page)
-        self.subtitles.page_index = self.stack.addWidget(subtitle_scroll)
-        subtitle_nav = QPushButton('字幕识别'); subtitle_nav.setObjectName('nav'); subtitle_nav.setCheckable(True)
-        subtitle_nav.clicked.connect(lambda: self.select(self.subtitles.page_index))
-        self.navbuttons.append(subtitle_nav)
-        self.centralWidget().layout().itemAt(0).widget().layout().insertWidget(5,subtitle_nav)
-        self.subtitles.page.show_compass.clicked.connect(self.show_compass)
+        desktop = self.subtitles.page.show_desktop
+        desktop.setChecked(self.settings.value('subtitles/show_desktop', False, type=bool))
+        self.desktop_subtitle.set_enabled(desktop.isChecked())
+        desktop_size = self.subtitles.page.desktop_font_size
+        desktop_size.setValue(self.settings.value('subtitles/desktop_font_size', DesktopSubtitle.DEFAULT_FONT_SIZE, type=int))
+        desktop_size_field = self.subtitles.page.desktop_size_field
+        desktop_size_field.setEnabled(desktop.isChecked())
+        self.desktop_subtitle.set_font_size(desktop_size.value())
+
+        def show_video_subtitles(visible):
+            self.subtitle_overlay.set_visible(visible)
+            self.settings.setValue('subtitles/show_footer', visible)
+
+        footer.toggled.connect(show_video_subtitles)
+        desktop.toggled.connect(self.desktop_subtitle.set_enabled)
+        desktop.toggled.connect(lambda visible: self.settings.setValue('subtitles/show_desktop', visible))
+        desktop.toggled.connect(desktop_size_field.setEnabled)
+        desktop_size.valueChanged.connect(self.desktop_subtitle.set_font_size)
+        desktop_size.valueChanged.connect(lambda size: self.settings.setValue('subtitles/desktop_font_size', size))
         self.subtitles.enabled_changed.connect(lambda enabled: self.compass_toggle.setChecked(True) if enabled else None)
+        self.settings_view.add_section('subtitles', '字幕设置', self.subtitles.page)
+        self.settings_view.add_section('shortcuts', '快捷键', make_shortcut_settings(self))
+
+        bottom = self.stack.widget(0).layout().itemAt(2).layout()
+        compact = QPushButton('小窗观看')
+        compact.clicked.connect(self.enter_mini_player)
+        bottom.addWidget(compact)
+        show_compass = QPushButton('显示方向浮窗')
+        show_compass.clicked.connect(self.show_compass)
+        bottom.addWidget(show_compass)
         self._fullscreen_core = None
         self._fullscreen_restore_immersive = None
         def browser_ready():
@@ -140,8 +230,10 @@ def install(cls):
         self.window_controls = WindowControls(self)
         if self.settings.value('window/compact', False, type=bool):
             self.toggle_immersive()
-            geometry = self.settings.value('window/geometry')
-            if geometry: self.restoreGeometry(geometry)
+        self.show_at_startup()
+        self.desktop_subtitle.follow_player_screen()
+        self.compass.place_at_startup(self.settings.value('compass/position'), self.screen())
+        self.compass.setVisible(self.compass_toggle.isChecked())
 
     def sync_fullscreen(self):
         active = bool(self._fullscreen_core.ContainsFullScreenElement)
@@ -189,7 +281,6 @@ def install(cls):
         self.settings.setValue('compass/enabled', enabled); self.compass.setVisible(enabled)
 
     def show_compass(self):
-        self.compass.move(self.mapToGlobal(QPoint(24, 70)))
         self.compass_toggle.setChecked(True); self.compass.show(); self.compass.raise_()
 
     def side_button(self, which):
@@ -283,6 +374,8 @@ def install(cls):
     def close(self, event):
         self.settings.setValue('window/compact', self.immersive)
         self.subtitles.close()
+        self.desktop_subtitle.clear()
+        self.desktop_subtitle.close()
         self.shortcuts.stop()
         self.side_buttons.stop()
         self.raw_mouse.stop()

@@ -373,7 +373,8 @@ class SubtitleController(QObject):
             self.region = valid_region(dialog.canvas.region); self.save_region()
             self.page.set_preview(crop_region(dialog.canvas.image,self.region))
         dialog.deleteLater()
-        if not self._closed: self.parent().select(self.page_index)
+        if not self._closed:
+            self.parent().show_settings_section('subtitles')
 
     def tick(self):
         if self._closed or self._picker is not None: return

@@ -21,15 +21,22 @@ if '--self-test' in sys.argv:
     SMOKE_DIR.mkdir(parents=True, exist_ok=True)
     if not BILI_TEST: os.environ['LOCALAPPDATA'] = str(SMOKE_DIR)
 from PySide6.QtCore import Qt, QSettings, QTimer
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QKeySequence
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QLineEdit, QListWidget, QListWidgetItem, QStackedWidget,
     QCheckBox, QMessageBox)
 from genshinimpactvt.browser import BrowserHost, DATA, user32
+from genshinimpactvt.settings_ui import SettingsView
 from genshinimpactvt.storage import Store
 from genshinimpactvt.urls import normalize_url
 from genshinimpactvt.subtitle_overlay import SubtitleOverlay
 from genshinimpactvt.version import APP_NAME,APP_TITLE,__version__,DISPLAY_VERSION
+
+APP_ROOT = Path(__file__).resolve().parent
+ONBOARDING_PAGE = APP_ROOT / 'assets' / 'onboarding.html'
+ONBOARDING_URL = ONBOARDING_PAGE.as_uri()
+TEST_PAGE = APP_ROOT / 'fixture.html'
+BILIBILI_HOME_URL = 'https://www.bilibili.com/'
 
 user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
 STYLE = '''
@@ -77,8 +84,9 @@ class Floating(QWidget):
         else: self.hide(); event.ignore()
 
 class Main(QMainWindow):
-    def __init__(self, data_dir=DATA):
+    def __init__(self, data_dir=DATA, *, startup_page=TEST_PAGE):
         super().__init__(); self.data_dir = Path(data_dir); self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.startup_page = startup_page
         self.settings = QSettings(str(self.data_dir / 'settings.ini'), QSettings.Format.IniFormat)
         self.store = Store(self.data_dir / 'library.sqlite3'); self.current_url = ''
         self.setWindowTitle(APP_TITLE); self.resize(960, 620); self.setMinimumSize(480, 300)
@@ -94,20 +102,32 @@ class Main(QMainWindow):
         nav.addStretch(); caption = QLabel('您的攻略工作台'); caption.setObjectName('muted'); nav.addWidget(caption)
         outer.addWidget(side); outer.addWidget(self.stack, 1); self.select(0)
         self.floating = Floating(self)
-        self.pin.setChecked(self.settings.value('window/topmost', True, type=bool))
+
+    def show_at_startup(self):
         geometry = self.settings.value('window/geometry')
         if geometry: self.restoreGeometry(geometry)
         self.show()
-        self.set_topmost(self.pin.isChecked())
+        self.set_topmost(self.settings.value('window/topmost', True, type=bool))
+        # Allow the first window paint before the synchronous WinForms bootstrap.
+        QTimer.singleShot(16, self.open_start_page)
+
+    def open_start_page(self):
+        if self.browser.web or getattr(self, '_closing', False):
+            return
         start = self.settings.value('browser/last_url', '')
-        if start: QTimer.singleShot(0, lambda: self.open_url(start))
-        else: QTimer.singleShot(0, self.open_fixture)
+        if start: self.open_url(start)
+        else: self.open_fixture()
 
     def make_browser(self):
         page = QWidget(); layout = QVBoxLayout(page); layout.setContentsMargins(20,18,20,12); layout.setSpacing(12)
         bar = QHBoxLayout(); bar.addWidget(button('←', self.browser.back)); bar.addWidget(button('→', self.browser.forward)); bar.addWidget(button('↻', self.browser.reload))
         self.address = QLineEdit(); self.address.setPlaceholderText('输入网址，例如 example.com'); self.address.returnPressed.connect(lambda: self.open_url(self.address.text())); bar.addWidget(self.address, 1)
-        bar.addWidget(button('前往', lambda: self.open_url(self.address.text()))); bar.addWidget(button('☆ 收藏', self.add_bookmark)); layout.addLayout(bar)
+        bar.addWidget(button('前往', lambda: self.open_url(self.address.text())))
+        bilibili_home = button('B站首页', lambda: self.open_url(BILIBILI_HOME_URL))
+        bilibili_home.setShortcut(QKeySequence('Alt+B'))
+        bilibili_home.setToolTip('打开哔哩哔哩首页（Alt+B）')
+        bar.addWidget(bilibili_home)
+        bar.addWidget(button('☆ 收藏', self.add_bookmark)); layout.addLayout(bar)
         layout.addWidget(self.browser, 1)
         bottom = QHBoxLayout(); self.status = QLabel('正在启动浏览器…'); self.status.setObjectName('muted'); bottom.addWidget(self.status, 1)
         self.pin = QCheckBox('窗口置顶'); self.pin.toggled.connect(self.set_topmost); bottom.addWidget(self.pin)
@@ -124,10 +144,12 @@ class Main(QMainWindow):
         return page
 
     def make_settings(self):
-        page = QWidget(); box = QVBoxLayout(page); box.setContentsMargins(38,30,38,30)
-        title = QLabel('设置'); title.setObjectName('heading'); box.addWidget(title)
-        info = QLabel('视频控制'); info.setObjectName('muted'); box.addWidget(info)
-        box.addStretch(); return page
+        self.settings_view = SettingsView()
+        return self.settings_view
+
+    def show_settings_section(self, section):
+        self.settings_view.show_section(section)
+        self.select(self.stack.indexOf(self.settings_view))
 
     def request_uninstall(self):
         from genshinimpactvt.uninstaller import load_install, digest, HELPER
@@ -177,7 +199,8 @@ class Main(QMainWindow):
             except Exception as exc: self.error(f'删除失败：{exc}')
 
     def open_fixture(self):
-        self.status.setText('正在加载本地测试页面…'); self.browser.start((Path(__file__).parent / 'fixture.html').resolve().as_uri())
+        self.status.setText('正在加载本地页面…')
+        self.browser.start(self.startup_page.as_uri())
 
     def open_url(self, value):
         try:
@@ -186,7 +209,12 @@ class Main(QMainWindow):
             else: self.browser.navigate(url)
         except Exception as exc: self.error(str(exc))
 
-    def address_changed(self, url): self.address.setText(url)
+    def address_changed(self, url):
+        if url == ONBOARDING_URL:
+            self.address.clear()
+            self.address.setPlaceholderText('粘贴攻略视频链接，按回车或点「前往」')
+        else:
+            self.address.setText(url)
     def navigated(self, url, success, error):
         self.status.setText('页面加载完成' if success else '页面加载失败：' + error)
         if success and url.startswith(('http://','https://')):
@@ -238,12 +266,15 @@ install(Main)
 def main():
     ole = ctypes.OleDLL('ole32'); ole.OleInitialize(None)
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('GenshinImpactVT.Desktop.1')
-    app = QApplication(sys.argv[:1]); app.setWindowIcon(QIcon(str(Path(__file__).resolve().parent / 'assets' / 'app.ico')))
+    app = QApplication(sys.argv[:1]); app.setWindowIcon(QIcon(str(APP_ROOT / 'assets' / 'app.ico')))
     app.setApplicationName(APP_NAME);app.setApplicationVersion(__version__)
-    app.setStyleSheet(STYLE); window = Main(SMOKE_DIR/'app') if SMOKE_DIR is not None and BILI_TEST else Main()
+    app.setStyleSheet(STYLE)
+    ocr_test = SMOKE_DIR is not None and '--self-test-ocr' in sys.argv
+    data_dir = SMOKE_DIR / 'app' if SMOKE_DIR is not None and BILI_TEST else DATA
+    startup_page = TEST_PAGE if BILI_TEST or ocr_test else ONBOARDING_PAGE
+    window = Main(data_dir, startup_page=startup_page)
     test_result = {'ready': False, 'navigation': False, 'icon': not app.windowIcon().isNull(), 'errors': []}
     if SMOKE_DIR is not None:
-        ocr_test = '--self-test-ocr' in sys.argv
         finished = False
         window.browser.ready.connect(lambda: test_result.update(ready=True))
         window.browser.navigated.connect(lambda url, success, error: test_result.update(navigation=success))

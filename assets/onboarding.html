@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GenshinImpactVT 入门视频</title>
+<style>
+  :root { color-scheme: dark; font-family: "Microsoft YaHei UI", system-ui, sans-serif; color: #edf5f4; background: #142124; }
+  * { box-sizing: border-box; }
+  body { margin: 0 auto; max-width: 920px; padding: clamp(14px, 3vw, 26px); }
+  h1 { margin: 0 0 8px; font-size: clamp(20px, 4vw, 30px); line-height: 1.18; }
+  p { margin: 0 0 14px; font-size: 14px; line-height: 1.5; color: #bed0d1; }
+  video { width: 100%; max-height: 56vh; display: block; background: #101a1e; border: 1px solid #375052; border-radius: 10px; }
+  .directions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 12px 0; }
+  .directions span { margin-right: 5px; color: #bfd1d2; font-size: 13px; }
+  button { font: inherit; font-size: 13px; cursor: pointer; color: #d9eef0; padding: 4px 8px; background: #223638; border: 1px solid #456464; border-radius: 5px; }
+  button[aria-pressed="true"] { background: #b9e9e5; color: #193234; border-color: #b9e9e5; }
+  button:focus-visible { outline: 2px solid #b9e9e5; outline-offset: 2px; }
+  ol { margin: 0; padding-left: 22px; color: #c2d1d2; font-size: 13px; line-height: 1.65; }
+  strong { color: #f1f8f7; }
+</style>
+<main>
+  <h1>从一条攻略链接开始</h1>
+  <p>左上角的浮窗会跟随视频字幕显示方向。点击顶部地址栏，即可换成你的攻略。</p>
+  <video src="onboarding.webm" aria-label="软件操作和八向浮窗入门视频" controls autoplay muted loop playsinline></video>
+  <nav class="directions" aria-label="跳到指定方向"><span>试一个方向</span></nav>
+  <ol>
+    <li>点击窗口顶部的<strong>地址栏</strong>，粘贴攻略视频链接。</li>
+    <li>点<strong>前往</strong>或按 <strong>Enter</strong> 打开链接。也可点旁边的<strong>B站首页</strong>开始浏览。</li>
+    <li>点左侧<strong>设置</strong>，调整浮窗颜色、强度和大小，也可拖动浮窗。</li>
+  </ol>
+</main>
+<script>
+  const video = document.querySelector('video');
+  const controls = document.querySelector('.directions');
+  const track = video.addTextTrack('subtitles', '方向演示', 'zh-CN');
+  track.mode = 'hidden';
+  const directions = ['北', '东北', '东', '东南', '南', '西南', '西', '西北'];
+  const buttons = directions.map((direction, index) => {
+    const start = index * 5;
+    track.addCue(new VTTCue(start, start + 5, `向${direction}走`));
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = direction;
+    button.setAttribute('aria-pressed', 'false');
+    button.addEventListener('click', () => {
+      if (video.readyState === 0) return;
+      video.currentTime = start + .15;
+      video.play().catch(() => {});
+    });
+    controls.append(button);
+    return button;
+  });
+  track.addEventListener('cuechange', () => {
+    const activeIndex = Math.floor((track.activeCues?.[0]?.startTime ?? -5) / 5);
+    buttons.forEach((button, index) => button.setAttribute('aria-pressed', index === activeIndex));
+  });
+</script>
+</html>

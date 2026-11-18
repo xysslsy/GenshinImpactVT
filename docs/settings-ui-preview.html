@@ -1,0 +1,320 @@
+<style>
+  #givt-settings-preview { font-family: "Microsoft YaHei UI", system-ui, sans-serif; }
+  #givt-settings-preview .givt-window {
+    color-scheme: light dark;
+    --page: light-dark(#f5f7f7, #1a2326);
+    --surface: light-dark(#ffffff, #212c30);
+    --soft: light-dark(#edf2f1, #27363a);
+    --ink: light-dark(#19272a, #eef7f6);
+    --quiet: light-dark(#536668, #bacbcb);
+    --border: light-dark(#d9e3e1, #3c4e51);
+    --accent: light-dark(#17685e, #9be4d7);
+    --selected: light-dark(#dfeeea, #304c4a);
+    min-block-size: 590px; background: var(--page); color: var(--ink); border: 1px solid var(--border); border-radius: 14px;
+    overflow: hidden; font-size: 13px;
+  }
+  #givt-settings-preview .givt-chrome { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 15px 17px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  #givt-settings-preview .givt-app-name { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 650; margin-right: 10px; }
+  #givt-settings-preview .givt-app-name svg { width: 17px; height: 17px; color: var(--accent); }
+  #givt-settings-preview .givt-app-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 3px; color: var(--quiet); }
+  #givt-settings-preview .givt-app-nav span { padding: 5px 8px; border-radius: 6px; }
+  #givt-settings-preview .givt-app-nav [aria-current] { color: var(--accent); background: var(--selected); font-weight: 650; }
+  #givt-settings-preview .givt-body { display: grid; grid-template-columns: 150px minmax(0, 1fr); min-block-size: 425px; }
+  #givt-settings-preview .givt-sections { display: flex; flex-direction: column; gap: 5px; padding: 21px 11px; border-right: 1px solid var(--border); background: var(--surface); }
+  #givt-settings-preview button, #givt-settings-preview select { font: inherit; color: var(--ink); }
+  #givt-settings-preview .givt-sections button { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 9px; text-align: left; border: 0; border-radius: 7px; background: transparent; color: var(--quiet); }
+  #givt-settings-preview .givt-sections button svg { width: 15px; height: 15px; }
+  #givt-settings-preview .givt-sections button:hover { background: var(--soft); }
+  #givt-settings-preview .givt-sections button[aria-pressed="true"] { color: var(--accent); background: var(--selected); font-weight: 650; }
+  #givt-settings-preview .givt-content, #givt-settings-preview .givt-folds { padding: clamp(14px, 2.7vw, 25px); min-width: 0; }
+  #givt-settings-preview :is(h2,h3,p,figure) { margin: 0; }
+  #givt-settings-preview h2 { font-size: 21px; font-weight: 650; letter-spacing: -.03em; }
+  #givt-settings-preview .givt-heading { margin-bottom: 15px; }
+  #givt-settings-preview .givt-panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(190px, 300px); gap: 15px; align-items: start; }
+  #givt-settings-preview .givt-list, #givt-settings-preview .givt-previewcard { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); min-width: 0; }
+  #givt-settings-preview .givt-list { padding: 0 13px; }
+  #givt-settings-preview .givt-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 0; }
+  #givt-settings-preview .givt-row + .givt-row { border-top: 1px solid var(--border); }
+  #givt-settings-preview .givt-row label { min-width: 0; }
+  #givt-settings-preview .givt-row small { display: block; color: var(--quiet); margin-top: 2px; font-size: 11px; }
+  #givt-settings-preview .givt-range { display: grid; grid-template-columns: minmax(58px, 1fr) 42px; align-items: center; gap: 7px; width: 53%; max-width: 175px; min-width: 105px; }
+  #givt-settings-preview input[type="range"] { width: 100%; min-width: 0; margin: 0; accent-color: var(--accent); }
+  #givt-settings-preview .givt-range output { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--quiet); font-size: 11px; }
+  #givt-settings-preview input[type="color"] { inline-size: 31px; block-size: 25px; padding: 2px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); }
+  #givt-settings-preview input[type="checkbox"] { accent-color: var(--accent); margin: 0; }
+  #givt-settings-preview .givt-switch { flex: none; appearance: none; inline-size: 35px; block-size: 20px; border-radius: 14px; background: var(--border); position: relative; }
+  #givt-settings-preview .givt-switch::before { position: absolute; content: ""; block-size: 14px; inline-size: 14px; inset: 3px auto auto 3px; border-radius: 50%; background: var(--surface); }
+  #givt-settings-preview .givt-switch:checked { background: var(--accent); }
+  #givt-settings-preview .givt-switch:checked::before { inset-inline-start: 18px; }
+  #givt-settings-preview select { padding: 5px 7px; max-width: 58%; border: 1px solid var(--border); border-radius: 6px; background: var(--soft); }
+  #givt-settings-preview .givt-previewcard { overflow: hidden; }
+  #givt-settings-preview .givt-previewhead { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 7px; padding: 10px; }
+  #givt-settings-preview .givt-previewhead h3 { font-size: 13px; font-weight: 650; }
+  #givt-settings-preview canvas { display: block; width: 100%; height: auto; max-height: 236px; object-fit: contain; background: #233a3d; }
+  #givt-settings-preview .givt-folds > details { display: block; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); margin-bottom: 8px; }
+  #givt-settings-preview .givt-folds > details > summary { padding: 11px 13px; font-weight: 600; }
+  #givt-settings-preview .givt-folds .givt-mount { padding: 0 9px 9px; }
+  #givt-settings-preview .givt-folds .givt-panel { gap: 12px; }
+  #givt-settings-preview .givt-folds .givt-row { padding-block: 8px; }
+  #givt-settings-preview kbd { font: inherit; font-size: 11px; white-space: nowrap; padding: 2px 6px; border-radius: 4px; background: var(--soft); color: var(--quiet); }
+  #givt-settings-preview .givt-muted { color: var(--quiet); font-size: 11px; }
+  #givt-settings-preview [hidden] { display: none !important; }
+  @media (max-width: 740px) {
+    #givt-settings-preview .givt-body { grid-template-columns: 1fr; }
+    #givt-settings-preview .givt-sections { flex-direction: row; flex-wrap: wrap; padding: 8px; border-right: 0; border-bottom: 1px solid var(--border); }
+    #givt-settings-preview .givt-window { min-block-size: 520px; }
+  }
+  @media (max-width: 565px) {
+    #givt-settings-preview .givt-panel { grid-template-columns: 1fr; }
+    #givt-settings-preview .givt-window { min-block-size: 715px; }
+    #givt-settings-preview .givt-sections button { font-size: 12px; }
+  }
+</style>
+<div id="givt-settings-preview">
+  <div class="viz-carousel" aria-label="设置界面方案" data-previous-label="上一方案" data-next-label="下一方案">
+    <section data-variant="分栏设置" aria-label="分栏设置">
+      <div class="givt-window">
+        <header class="givt-chrome">
+          <div class="givt-app-name"><i data-lucide="compass" aria-hidden="true"></i>GenshinImpactVT</div>
+          <div class="givt-app-nav"><span>浏览器</span><span>收藏</span><span>历史记录</span><span>字幕识别</span><span aria-current="page">设置</span></div>
+        </header>
+        <div class="givt-body">
+          <nav class="givt-sections" aria-label="设置分类">
+            <button type="button" data-show="compass" aria-pressed="true"><i data-lucide="navigation" aria-hidden="true"></i>方向浮窗</button>
+            <button type="button" data-show="window" aria-pressed="false"><i data-lucide="panels-top-left" aria-hidden="true"></i>窗口与播放</button>
+            <button type="button" data-show="input" aria-pressed="false"><i data-lucide="keyboard" aria-hidden="true"></i>键盘与鼠标</button>
+            <button type="button" data-show="manage" aria-pressed="false"><i data-lucide="settings" aria-hidden="true"></i>软件管理</button>
+          </nav>
+          <div class="givt-content">
+            <div data-pane="compass"><h2 class="givt-heading">方向浮窗</h2><div class="givt-mount" data-template="compass"></div></div>
+            <div data-pane="window" hidden><h2 class="givt-heading">窗口与播放</h2><div class="givt-mount" data-template="window"></div></div>
+            <div data-pane="input" hidden><h2 class="givt-heading">键盘与鼠标</h2><div class="givt-mount" data-template="input"></div></div>
+            <div data-pane="manage" hidden><h2 class="givt-heading">软件管理</h2><div class="givt-mount" data-template="manage"></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section data-variant="折叠设置" aria-label="折叠设置" hidden>
+      <div class="givt-window">
+        <header class="givt-chrome">
+          <div class="givt-app-name"><i data-lucide="compass" aria-hidden="true"></i>GenshinImpactVT</div>
+          <div class="givt-app-nav"><span>浏览器</span><span>收藏</span><span>历史记录</span><span>字幕识别</span><span aria-current="page">设置</span></div>
+        </header>
+        <div class="givt-folds">
+          <h2 class="givt-heading">设置</h2>
+          <details name="givt-preferences" open><summary>方向浮窗</summary><div class="givt-mount" data-template="compass"></div></details>
+          <details name="givt-preferences"><summary>窗口与播放</summary><div class="givt-mount" data-template="window"></div></details>
+          <details name="givt-preferences"><summary>键盘与鼠标</summary><div class="givt-mount" data-template="input"></div></details>
+          <details name="givt-preferences"><summary>软件管理</summary><div class="givt-mount" data-template="manage"></div></details>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <template data-source="compass">
+    <div class="givt-panel" aria-label="方向浮窗预览与设置">
+      <div class="givt-list">
+        <label class="givt-row"><span>显示方向浮窗<small>默认放在屏幕左上角</small></span><input class="givt-switch" type="checkbox" data-field="visible" checked></label>
+        <label class="givt-row"><span>显示柔光刻线和箭头</span><input class="givt-switch" type="checkbox" data-field="glow" checked></label>
+        <label class="givt-row"><span>高亮颜色</span><input type="color" value="#8de7ff" data-field="color"></label>
+        <label class="givt-row"><span>高亮强度</span><span class="givt-range"><input type="range" min="15" max="100" value="75" data-field="strength"><output data-value="strength">75%</output></span></label>
+        <label class="givt-row"><span>浮窗大小</span><span class="givt-range"><input type="range" min="140" max="420" value="240" data-field="size"><output data-value="size">240 px</output></span></label>
+        <label class="givt-row"><span>提示时长</span><span class="givt-range"><input type="range" min="1" max="30" value="5" data-field="hold"><output data-value="hold">5 秒</output></span></label>
+      </div>
+      <figure class="givt-previewcard">
+        <div class="givt-previewhead"><h3>实时预览</h3><select aria-label="预览方向" data-field="direction">
+          <option value="0">北</option><option value="1" selected>东北</option><option value="2">东</option><option value="3">东南</option>
+          <option value="4">南</option><option value="5">西南</option><option value="6">西</option><option value="7">西北</option>
+        </select></div>
+        <canvas width="640" height="540" role="img" aria-label="三段柔光刻线和双箭头的方向预览"></canvas>
+      </figure>
+    </div>
+  </template>
+
+  <template data-source="window">
+    <div class="givt-list">
+      <label class="givt-row"><span>窗口不透明度</span><span class="givt-range"><input type="range" min="20" max="100" value="100" data-suffix="%"><output>100%</output></span></label>
+      <label class="givt-row"><span>窗口置顶</span><input class="givt-switch" type="checkbox" checked></label>
+      <label class="givt-row"><span>在视频内显示透明字幕</span><input class="givt-switch" type="checkbox" checked></label>
+    </div>
+  </template>
+
+  <template data-source="input">
+    <div class="givt-list">
+      <label class="givt-row"><span>启用全局键盘快捷键</span><input class="givt-switch" type="checkbox" checked></label>
+      <label class="givt-row"><span>键盘监听方式</span><select><option>普通监听</option><option>系统全局热键</option></select></label>
+      <label class="givt-row"><span>启用鼠标侧键</span><input class="givt-switch" type="checkbox" checked></label>
+      <div class="givt-row"><span>显示或隐藏方向浮窗</span><kbd>F8</kbd></div>
+      <div class="givt-row"><span>恢复正常界面</span><kbd>F11</kbd></div>
+    </div>
+  </template>
+
+  <template data-source="manage">
+    <div class="givt-list">
+      <div class="givt-row"><span>卸载此版本<small>可在正式便携版中操作</small></span><span class="givt-muted">预览中不可用</span></div>
+    </div>
+  </template>
+</div>
+<script>
+  (() => {
+    const root = document.getElementById('givt-settings-preview');
+    for (const mount of root.querySelectorAll('[data-template]')) {
+      mount.append(root.querySelector(`template[data-source="${mount.dataset.template}"]`).content.cloneNode(true));
+    }
+    const menu = root.querySelector('.givt-sections');
+    const tabs = [...menu.querySelectorAll('button')];
+    const panes = [...root.querySelectorAll('[data-pane]')];
+    for (const tab of tabs) {
+      tab.addEventListener('click', () => {
+        tabs.forEach(item => item.setAttribute('aria-pressed', item === tab));
+        panes.forEach(pane => pane.hidden = pane.dataset.pane !== tab.dataset.show);
+      });
+    }
+    for (const input of root.querySelectorAll('[data-suffix]')) {
+      input.addEventListener('input', () => input.nextElementSibling.value = input.value + input.dataset.suffix);
+    }
+
+    function drawDirection(ctx, state) {
+      const angle = (state.direction * 45 - 90) * Math.PI / 180;
+      ctx.save();
+      ctx.rotate(angle);
+      ctx.globalAlpha = state.strength / 100;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for (const [start, stop, width] of [[-42, -26, 7], [-16, 16, 12], [26, 42, 7]]) {
+        ctx.beginPath();
+        ctx.arc(0, 0, 92, start * Math.PI / 180, stop * Math.PI / 180);
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = state.color;
+        ctx.strokeStyle = '#14252b';
+        ctx.lineWidth = width + 3;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = state.color;
+        ctx.lineWidth = width;
+        ctx.stroke();
+      }
+      for (const tip of [30, 42]) {
+        ctx.beginPath();
+        ctx.moveTo(tip - 7, -7);
+        ctx.lineTo(tip, 0);
+        ctx.lineTo(tip - 7, 7);
+        ctx.strokeStyle = '#14252b';
+        ctx.lineWidth = 5;
+        ctx.stroke();
+        ctx.strokeStyle = state.color;
+        ctx.lineWidth = 2.8;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function paint(canvas, state) {
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(2, 0, 0, 2, 0, 0);
+      const background = ctx.createLinearGradient(0, 0, 320, 270);
+      background.addColorStop(0, '#294749');
+      background.addColorStop(1, '#192b2e');
+      ctx.fillStyle = background;
+      ctx.fillRect(0, 0, 320, 270);
+      ctx.save();
+      ctx.translate(160, 135);
+      const scale = .72 + (state.size - 140) * .36 / 280;
+      ctx.scale(scale, scale);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, 89, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.fillStyle = '#596f5b';
+      ctx.fillRect(-100, -100, 200, 200);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#9cab976e';
+      for (let y = -100; y < 100; y += 13) {
+        ctx.beginPath();
+        ctx.moveTo(-95, y - 24);
+        ctx.bezierCurveTo(-25, y - 36, 8, y + 26, 95, y + 14);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.moveTo(-93, -40);
+      ctx.bezierCurveTo(-16, -67, -41, 33, 94, 40);
+      ctx.strokeStyle = '#609296';
+      ctx.lineWidth = 12;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-60, 92);
+      ctx.bezierCurveTo(-35, 40, 27, 7, 53, -89);
+      ctx.strokeStyle = '#d8cc9a';
+      ctx.lineWidth = 1.7;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#edf6ed';
+      for (const [x,y] of [[-54,-9],[-29,49],[36,-44],[60,31],[0,0]]) {
+        ctx.beginPath();
+        ctx.arc(x,y,x === 0 ? 3.5 : 2.7,0,Math.PI*2);
+        ctx.fill();
+      }
+      ctx.restore();
+      if (state.visible && state.glow) drawDirection(ctx, state);
+      if (state.visible) {
+        ctx.fillStyle = '#e4f2ed';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = 'bold 13px Microsoft YaHei UI, sans-serif';
+        for (const [x,y,text] of [[0,-111,'北'],[111,0,'东'],[0,111,'南'],[-111,0,'西']]) ctx.fillText(text,x,y);
+      }
+      ctx.restore();
+    }
+
+    const panels = [...root.querySelectorAll('[data-template="compass"]')];
+    const saved = window.openai?.widgetState?.privateContent;
+    const readState = (state, savedPanel) => {
+      if (!savedPanel) return;
+      for (const key of Object.keys(state)) {
+        if (typeof savedPanel[key] === typeof state[key]) state[key] = savedPanel[key];
+      }
+    };
+    const settings = panels.map((panel, index) => {
+      const canvas = panel.querySelector('canvas');
+      const controls = [...panel.querySelectorAll('[data-field]')];
+      const state = { visible: true, glow: true, color: '#8de7ff', strength: 75, size: 240, hold: 5, direction: 1 };
+      readState(state, saved?.[index]);
+      const render = () => {
+        for (const control of controls) {
+          const value = state[control.dataset.field];
+          if (control.type === 'checkbox') control.checked = value;
+          else control.value = value;
+        }
+        for (const [key, unit] of [['strength','%'], ['size',' px'], ['hold',' 秒']]) {
+          panel.querySelector(`[data-value="${key}"]`).value = state[key] + unit;
+        }
+        paint(canvas, state);
+      };
+      const read = () => {
+        for (const control of controls) {
+          const field = control.dataset.field;
+          if (control.type === 'checkbox') state[field] = control.checked;
+          else state[field] = typeof state[field] === 'number' ? Number(control.value) : control.value;
+        }
+        render();
+      };
+      panel.addEventListener('input', read);
+      panel.addEventListener('change', () => {
+        read();
+        window.openai?.setWidgetState?.({ privateContent: settings.map(item => item.state) })?.catch(() => {});
+      });
+      render();
+      if (globalThis.Tweak) {
+        const tweak = new Tweak({ container: panel.querySelector('.givt-panel'), onChange: render });
+        tweak.addColorPicker(state, 'color', { label: '方向高亮色' });
+        tweak.addSlider(state, 'strength', { label: '高亮强度', min: 15, max: 100, unit: '%' });
+      }
+      return { state, render };
+    });
+    window.addEventListener('openai:set_globals', event => {
+      const next = event.detail.globals?.widgetState?.privateContent;
+      settings.forEach((panel, index) => { readState(panel.state, next?.[index]); panel.render(); });
+    });
+  })();
+</script>

@@ -5,10 +5,11 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import Qt, QObject, Signal
 from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QHBoxLayout,
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QKeySequenceEdit, QComboBox)
 
 from .episode_keys import user32, HOOKPROC, KeyData
+from .settings_ui import SettingsCard, SettingsDisclosure, setting_note
 
 ACTIONS = {
     'pause': ('播放 / 暂停', ''), 'back': ('快退 5 秒', '5'),
@@ -21,6 +22,7 @@ ACTIONS = {
     'opacity_up': ('更不透明（不透明度提高 10%）', 'F3'),
     'opacity_reset': ('恢复完全不透明', 'F4'),
 }
+COMMON_ACTIONS = ('pause', 'back', 'forward', 'compass', 'controls', 'restore')
 
 
 @dataclass(frozen=True)
@@ -139,26 +141,65 @@ class SystemKeys:
 
 class ShortcutSettings(QWidget):
     def __init__(self, manager):
-        super().__init__(); self.manager = manager; self.editing = False
-        layout = QVBoxLayout(self); layout.setContentsMargins(0,8,0,12)
-        title = QLabel('自定义快捷键'); title.setStyleSheet('font-weight:600'); layout.addWidget(title)
-        note = QLabel('全局按键在其他程序中也生效。编辑期间暂停快捷键和侧键；留空可禁用某个动作。系统全局模式会占用所设按键。')
-        note.setWordWrap(True); layout.addWidget(note)
-        form = QFormLayout(); self.editors = {}
-        for action,(label,_) in ACTIONS.items():
-            editor = QKeySequenceEdit(); editor.setMaximumSequenceLength(1); editor.setClearButtonEnabled(True)
-            self.editors[action] = editor; form.addRow(label,editor)
+        super().__init__()
+        self.manager = manager
+        self.editing = False
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        self.summary = SettingsCard('常用快捷键')
+        self.summary_keys = {}
+        for action in COMMON_ACTIONS:
+            key = QLabel()
+            key.setObjectName('keyHint')
+            key.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            key.setMaximumWidth(112)
+            self.summary_keys[action] = key
+            self.summary.form.addRow(ACTIONS[action][0], key)
+        self.edit_button = QPushButton('修改快捷键')
+        self.edit_button.setObjectName('settingsAction')
+        self.summary.form.addRow(self.edit_button)
+        layout.addWidget(self.summary)
+
+        self.editor_view = QWidget()
+        edit_layout = QVBoxLayout(self.editor_view)
+        edit_layout.setContentsMargins(0, 0, 0, 0)
+        common = SettingsCard('修改常用快捷键')
+        other = SettingsCard('')
+        self.editors = {}
+        for action, (label, _) in ACTIONS.items():
+            editor = QKeySequenceEdit()
+            editor.setMaximumSequenceLength(1)
+            editor.setClearButtonEnabled(True)
+            self.editors[action] = editor
+            (common if action in COMMON_ACTIONS else other).form.addRow(label, editor)
+        self.extra_bindings = SettingsDisclosure('更多按键 · 普通用户可忽略', other)
+
         self.mouse_editors = {}
-        for which,label in ((2,'鼠标侧键上键'),(1,'鼠标侧键下键')):
-            combo = QComboBox(); combo.addItem('不执行动作','')
-            for action,(name,_) in ACTIONS.items(): combo.addItem(name,action)
-            self.mouse_editors[which] = combo; form.addRow(label,combo)
-        layout.addLayout(form)
+        for which, label in ((2, '鼠标侧键上键'), (1, '鼠标侧键下键')):
+            combo = QComboBox()
+            combo.addItem('不执行动作', '')
+            for action, (name, _) in ACTIONS.items():
+                combo.addItem(name, action)
+            self.mouse_editors[which] = combo
+            other.form.addRow(label, combo)
+
         row = QHBoxLayout()
-        self.edit_button = QPushButton('编辑快捷键'); self.apply_button = QPushButton('保存并启用')
-        self.cancel_button = QPushButton('取消'); self.default_button = QPushButton('恢复默认')
-        for widget in (self.edit_button,self.apply_button,self.cancel_button,self.default_button): row.addWidget(widget)
-        layout.addLayout(row); self.message = QLabel(''); self.message.setWordWrap(True); layout.addWidget(self.message)
+        self.apply_button = QPushButton('保存')
+        self.apply_button.setObjectName('settingsAction')
+        self.cancel_button = QPushButton('取消')
+        self.default_button = QPushButton('恢复默认')
+        for widget in (self.default_button, self.cancel_button, self.apply_button):
+            row.addWidget(widget)
+        edit_layout.addWidget(common)
+        edit_layout.addWidget(self.extra_bindings)
+        edit_layout.addLayout(row)
+        layout.addWidget(self.editor_view)
+        self.message = setting_note('')
+        self.message.hide()
+        layout.addWidget(self.message)
+
         self.edit_button.clicked.connect(self.begin); self.apply_button.clicked.connect(self.apply)
         self.cancel_button.clicked.connect(self.cancel); self.default_button.clicked.connect(self.defaults)
         self.reload(); self.set_editing(False)
@@ -166,15 +207,22 @@ class ShortcutSettings(QWidget):
     def reload(self):
         for action,editor in self.editors.items(): editor.setKeySequence(QKeySequence(self.manager.values[action]))
         for which,combo in self.mouse_editors.items(): combo.setCurrentIndex(max(0,combo.findData(self.manager.mouse[which])))
+        for action, label in self.summary_keys.items():
+            label.setText(self.manager.values[action] or '未设置')
 
     def set_editing(self, editing):
         self.editing = editing
-        for widget in (*self.editors.values(),*self.mouse_editors.values(),self.apply_button,self.cancel_button,self.default_button): widget.setEnabled(editing)
-        self.edit_button.setEnabled(not editing)
+        self.summary.setVisible(not editing)
+        self.editor_view.setVisible(editing)
+
+    def show_message(self, text):
+        self.message.setText(text)
+        self.message.setVisible(bool(text))
 
     def begin(self):
         self.manager.suspended = True; self.manager.stop(); self.set_editing(True)
-        self.message.setText('正在编辑，快捷键已暂停。修改后点击“保存并启用”。')
+        self.extra_bindings.set_expanded(False)
+        self.show_message('编辑时暂停快捷键和侧键。留空可禁用该动作。')
 
     def defaults(self):
         for action,editor in self.editors.items(): editor.setKeySequence(QKeySequence(ACTIONS[action][1]))
@@ -185,12 +233,13 @@ class ShortcutSettings(QWidget):
         values = {action:editor.keySequence().toString(QKeySequence.SequenceFormat.PortableText) for action,editor in self.editors.items()}
         mouse = {which:combo.currentData() for which,combo in self.mouse_editors.items()}
         try: self.manager.apply(values,mouse)
-        except ValueError as exc: self.message.setText(str(exc)); return
-        self.set_editing(False); self.message.setText('快捷键已保存，下次启动继续使用。')
+        except ValueError as exc: self.show_message(str(exc)); return
+        self.reload()
+        self.set_editing(False); self.show_message('快捷键已保存。')
 
     def cancel(self):
         self.reload(); self.manager.suspended = False; self.manager.start()
-        self.set_editing(False); self.message.setText('已恢复原来的快捷键。')
+        self.set_editing(False); self.show_message('已恢复原来的快捷键。')
 
 
 class Shortcuts(QObject):

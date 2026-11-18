@@ -10,9 +10,10 @@ def main():
     from PySide6.QtGui import QImage,QPainter,QColor,QFont
     from PySide6.QtWidgets import QApplication
     from main import Main,STYLE
-    from genshinimpactvt.compass import Compass,ambient_position
+    from genshinimpactvt.compass import Compass
     settings=QSettings(str(data/'app'/'settings.ini'),QSettings.Format.IniFormat)
     for key in ('mouse/enabled','episode_keys/enabled','subtitles/enabled'):settings.setValue(key,False)
+    settings.setValue('subtitles/auto_on_video',False)
     settings.setValue('compass/enabled',True);settings.setValue('browser/last_url','');settings.sync()
     ole=ctypes.OleDLL('ole32');ole.OleInitialize(None);app=QApplication([]);app.setStyleSheet(STYLE)
     win=Main(data/'app');result={}

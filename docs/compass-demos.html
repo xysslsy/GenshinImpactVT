@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小地图方向高亮 · 方案预览</title>
+<style>
+  :root { color-scheme: dark; font-family: "Microsoft YaHei UI", system-ui, sans-serif; color: #eef1ed; background: #111719; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  main { max-width: 1450px; margin: auto; padding: 48px clamp(16px, 4vw, 58px) 48px; }
+  h1 { margin: 0 0 12px; font-size: clamp(29px, 4vw, 46px); line-height: 1.15; letter-spacing: -.045em; }
+  p { margin: 0; color: #acbab8; line-height: 1.65; }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 15px 24px; padding: 24px 0; }
+  fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+  legend { padding: 0; margin-bottom: 8px; font-size: 13px; color: #acbab8; }
+  .group { display: flex; flex-wrap: wrap; gap: 5px; }
+  button, select { padding: 8px 11px; border: 1px solid #485755; border-radius: 6px; color: inherit; background: #1c2526; font: inherit; font-size: 13px; cursor: pointer; }
+  button:hover, select:hover { background: #273737; }
+  button[aria-pressed="true"] { background: #c7f4e6; color: #142822; border-color: #c7f4e6; }
+  button:focus-visible, select:focus-visible { outline: 2px solid #b7e8f5; outline-offset: 3px; }
+  .cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+  article { border: 1px solid #334143; border-radius: 12px; overflow: hidden; background: #192123; min-width: 0; }
+  canvas { width: 100%; aspect-ratio: 1.06; display: block; }
+  .caption { padding: 16px 16px 18px; }
+  h2 { display: flex; align-items: center; gap: 9px; font-size: 18px; margin: 0 0 7px; }
+  h2 span { color: #b4e7d7; font: 700 11px system-ui, sans-serif; border: 1px solid #3c5a54; border-radius: 4px; padding: 3px 5px; }
+  .caption p { font-size: 13px; }
+  .status { margin-top: 16px; font-size: 13px; }
+  @media (max-width: 1150px) { .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 760px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 460px) { main { padding-top: 25px; } .cards { grid-template-columns: 1fr; } }
+</style>
+<main>
+  <h1>小地图方向高亮</h1>
+  <p>五套方案共享同一个方向和背景。地图为自制示意，亮度和图标密度可切换。</p>
+  <div class="toolbar">
+    <fieldset>
+      <legend>提示方向</legend>
+      <div class="group" id="directions">
+        <button type="button" data-direction="0" aria-pressed="false">北</button>
+        <button type="button" data-direction="1" aria-pressed="true">东北</button>
+        <button type="button" data-direction="2" aria-pressed="false">东</button>
+        <button type="button" data-direction="3" aria-pressed="false">东南</button>
+        <button type="button" data-direction="4" aria-pressed="false">南</button>
+        <button type="button" data-direction="5" aria-pressed="false">西南</button>
+        <button type="button" data-direction="6" aria-pressed="false">西</button>
+        <button type="button" data-direction="7" aria-pressed="false">西北</button>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>地图背景</legend>
+      <select id="terrain" aria-label="地图背景">
+        <option value="dusk">暗色山地</option>
+        <option value="day">明亮草地</option>
+        <option value="busy">图标密集</option>
+      </select>
+    </fieldset>
+    <button type="button" id="replay">播放亮起与淡出</button>
+    <button type="button" id="compare" aria-pressed="false">隐藏高亮</button>
+  </div>
+  <section class="cards" aria-label="五套高亮方案">
+    <article><canvas data-style="soft" aria-label="柔光弧带预览"></canvas><div class="caption"><h2><span>A</span>柔光弧带</h2><p>宽弧和渐弱边缘，暗背景下过渡柔和。</p></div></article>
+    <article><canvas data-style="outline" aria-label="双层细弧预览"></canvas><div class="caption"><h2><span>B</span>双层细弧</h2><p>深色描边托住亮弧，明亮画面也好辨认。</p></div></article>
+    <article><canvas data-style="segments" aria-label="三段刻线预览"></canvas><div class="caption"><h2><span>C</span>三段刻线</h2><p>中间一段最亮，两侧短线标出扇区。</p></div></article>
+    <article><canvas data-style="chevron" aria-label="外缘双箭头预览"></canvas><div class="caption"><h2><span>D</span>外缘双箭头</h2><p>标记移到地图外侧，给边缘图标留空间。</p></div></article>
+    <article><canvas data-style="combined" aria-label="柔光刻线与近中心双箭头预览"></canvas><div class="caption"><h2><span>E</span>柔光刻线＋双箭头</h2><p>外缘三段刻线带柔光，双箭头靠近中心定位标记。</p></div></article>
+  </section>
+  <p class="status" id="status" role="status">当前方向 · 东北</p>
+</main>
+<script>
+  const canvases = [...document.querySelectorAll('canvas')];
+  const directions = [...document.querySelectorAll('[data-direction]')];
+  const terrain = document.querySelector('#terrain');
+  const status = document.querySelector('#status');
+  const compare = document.querySelector('#compare');
+  const center = [170, 160];
+  const mapRadius = 102;
+  const radians = degrees => degrees * Math.PI / 180;
+  const cueColor = '#8de7ff';
+  let direction = 1;
+  let hidden = false;
+  let cueOpacity = 1;
+  let animation;
+
+  function path(ctx, points, closed = false) {
+    ctx.beginPath();
+    ctx.moveTo(...points[0]);
+    for (const point of points.slice(1)) ctx.lineTo(...point);
+    if (closed) ctx.closePath();
+  }
+
+  function drawMap(ctx, scene) {
+    const day = scene === 'day';
+    const busy = scene === 'busy';
+    const backdrop = ctx.createLinearGradient(0, 0, 340, 320);
+    backdrop.addColorStop(0, day ? '#a8aa77' : '#283c3b');
+    backdrop.addColorStop(1, day ? '#697e62' : '#182226');
+    ctx.fillStyle = backdrop;
+    ctx.fillRect(0, 0, 340, 320);
+    ctx.save();
+    ctx.translate(...center);
+    ctx.beginPath();
+    ctx.arc(0, 0, mapRadius, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = day ? '#c1b980' : '#414c3c';
+    ctx.fillRect(-110, -110, 220, 220);
+    const shapes = [
+      [[-109,-73],[-59,-114],[-13,-107],[20,-74],[13,-43],[-12,-24],[-30,-36],[-68,-13],[-109,-24]],
+      [[15,-113],[107,-111],[111,-31],[75,-9],[45,-26],[38,-58]],
+      [[-109,14],[-77,14],[-57,50],[-23,67],[-4,107],[-109,110]],
+      [[46,17],[77,12],[110,-10],[114,112],[14,109],[12,73],[31,60]],
+    ];
+    const fills = day ? ['#677e55','#9c9c68','#8e9e65','#a0a36b'] : ['#55634a','#697052','#596b53','#354e47'];
+    shapes.forEach((points, index) => { path(ctx, points, true); ctx.fillStyle = fills[index]; ctx.fill(); });
+    for (let j = 0; j < 17; j++) {
+      ctx.beginPath();
+      for (let x = -113; x <= 113; x += 4) {
+        const y = -100 + j * 13 + Math.sin((x + j * 9) / 23) * 9 + x * .17;
+        if (x === -113) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = day ? '#55694e55' : '#a6a6894d';
+      ctx.lineWidth = .8;
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(-118, -22);
+    ctx.bezierCurveTo(-40, -59, -55, 28, 11, 22);
+    ctx.bezierCurveTo(64, 27, 63, 66, 114, 84);
+    ctx.strokeStyle = day ? '#537f84' : '#2b626a';
+    ctx.lineWidth = 12;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-82, 101);
+    ctx.bezierCurveTo(-36, 64, -41, 18, 10, -9);
+    ctx.bezierCurveTo(30, -16, 44, -31, 65, -95);
+    ctx.strokeStyle = day ? '#f2dfab' : '#b6a987';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const markers = [[-38,-37],[57,-53],[58,45],[-52,60]];
+    if (busy) markers.push([-78,-49],[-56,-70],[-9,-72],[30,-80],[76,-34],[73,-8],[79,29],[-71,13],[-26,35],[22,51],[26,78]);
+    for (const [x, y] of markers) {
+      path(ctx, [[x, y - 5], [x + 5, y], [x, y + 5], [x - 5, y]], true);
+      ctx.fillStyle = '#fff5c9';
+      ctx.strokeStyle = '#253534';
+      ctx.lineWidth = 1.6;
+      ctx.fill(); ctx.stroke();
+    }
+    path(ctx, [[0,-12],[7,8],[0,5],[-7,8]], true);
+    ctx.fillStyle = '#f7faf8';
+    ctx.strokeStyle = '#283738';
+    ctx.lineWidth = 2;
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(...center, mapRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = '#1b2827';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.font = '600 13px Microsoft YaHei UI, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    [[0,-147,'北'],[147,0,'东'],[0,147,'南'],[-147,0,'西']].forEach(([x,y,label]) => {
+      ctx.lineWidth = 3;
+      ctx.strokeText(label, center[0] + x, center[1] + y);
+      ctx.fillStyle = '#f1f5f0';
+      ctx.fillText(label, center[0] + x, center[1] + y);
+    });
+  }
+
+  function arc(ctx, radius, angle, from, to, width, color) {
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, angle + radians(from), angle + radians(to));
+    ctx.lineWidth = width;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+  }
+
+  function drawChevrons(ctx, angle, nearTip, farTip) {
+    ctx.rotate(angle);
+    for (const [tip, height, color] of [[nearTip,9,'#d4f9ff'],[farTip,7,'#8de7ffb8']]) {
+      path(ctx, [[tip - 9,-height],[tip,0],[tip - 9,height]]);
+      ctx.lineWidth = 7; ctx.strokeStyle = '#0a2029'; ctx.stroke();
+      ctx.lineWidth = 3.5; ctx.strokeStyle = color; ctx.stroke();
+    }
+  }
+
+  function drawCue(ctx, style, opacity) {
+    const angle = radians(direction * 45 - 90);
+    ctx.save();
+    ctx.translate(...center);
+    ctx.globalAlpha = opacity;
+    ctx.lineCap = 'round';
+    if (style === 'soft') {
+      for (const [width, color] of [[25,'#71c9ff18'],[19,'#71c9ff38'],[13,'#81d5ff70'],[7,'#9cdefbb0']]) {
+        arc(ctx, 103, angle, -28, 28, width, color);
+      }
+      arc(ctx, 104, angle, -21, 21, 2.5, '#c9f4ffd4');
+    } else if (style === 'outline') {
+      arc(ctx, 107, angle, -25, 25, 11, '#0a2029');
+      arc(ctx, 107, angle, -25, 25, 6, cueColor);
+      arc(ctx, 107, angle, -15, 15, 2, '#effcfe');
+    } else if (style === 'segments' || style === 'combined') {
+      const segments = style === 'combined'
+        ? [[-42,-26,7,'#8de7ffbb'],[-16,16,12,'#d4f9ff'],[26,42,7,'#8de7ffbb']]
+        : [[-33,-21,3,'#8de7ffbb'],[-13,13,6,'#d4f9ff'],[21,33,3,'#8de7ffbb']];
+      if (style === 'combined') {
+        ctx.save();
+        ctx.shadowColor = '#68d2ffeb';
+        ctx.shadowBlur = 14 * ctx.getTransform().a;
+        for (const [from, to, width, color] of segments) {
+          arc(ctx, 111, angle, from, to, width + 2, color);
+        }
+        ctx.restore();
+      }
+      for (const [from, to, width, color] of segments) {
+        arc(ctx, 111, angle, from, to, width + 4, '#0a2029');
+        arc(ctx, 111, angle, from, to, width, color);
+      }
+      if (style === 'combined') drawChevrons(ctx, angle, 36, 50);
+    } else {
+      drawChevrons(ctx, angle, 120, 132);
+    }
+    ctx.restore();
+  }
+
+  function draw(opacity = cueOpacity) {
+    cueOpacity = opacity;
+    for (const canvas of canvases) {
+      const scale = Math.min(window.devicePixelRatio || 1, 3);
+      const width = Math.round(canvas.clientWidth * scale);
+      const height = Math.round(canvas.clientHeight * scale);
+      if (!width || !height) continue;
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(width / 340, 0, 0, height / 320, 0, 0);
+      drawMap(ctx, terrain.value);
+      if (!hidden) drawCue(ctx, canvas.dataset.style, opacity);
+    }
+  }
+
+  function stopAnimation() {
+    cancelAnimationFrame(animation);
+    animation = undefined;
+  }
+
+  function update() {
+    stopAnimation();
+    status.textContent = hidden ? '对照画面 · 高亮已隐藏' : `当前方向 · ${directions[direction].textContent}`;
+    draw(1);
+  }
+
+  directions.forEach((button, index) => button.addEventListener('click', () => {
+    direction = index;
+    directions.forEach((item, position) => item.setAttribute('aria-pressed', position === direction));
+    hidden = false;
+    compare.setAttribute('aria-pressed', false);
+    update();
+  }));
+  terrain.addEventListener('change', update);
+  compare.addEventListener('click', () => {
+    hidden = !hidden;
+    compare.setAttribute('aria-pressed', hidden);
+    update();
+  });
+  document.querySelector('#replay').addEventListener('click', () => {
+    hidden = false;
+    compare.setAttribute('aria-pressed', false);
+    update();
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const start = performance.now();
+    function frame(now) {
+      const elapsed = now - start;
+      const opacity = Math.min(1, elapsed / 155, Math.max(0, (1650 - elapsed) / 450));
+      if (elapsed < 1650) {
+        draw(opacity);
+        animation = requestAnimationFrame(frame);
+      } else {
+        draw(0);
+        animation = undefined;
+      }
+    }
+    draw(0);
+    animation = requestAnimationFrame(frame);
+  });
+  new ResizeObserver(() => draw()).observe(document.querySelector('.cards'));
+  draw();
+</script>
+</html>

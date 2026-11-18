@@ -1,6 +1,6 @@
 # 发行文件
 
-当前本地仅保留 **v2.0.2**。旧版在云端 SHA-256 核对后移入回收站；桌面入口同步到 v2.0.2，个人资料保留。
+当前发行版为 **v3.0**，本地同时保留 v2.0.2。
 
 | 版本 | 本地是否保留 | 下载 | SHA-256 |
 | --- | --- | --- | --- |
@@ -17,9 +17,10 @@
 | v2.0 | cloud only | [GitHub](https://github.com/xysslsy/GenshinImpactVT/releases/download/v2.0/GenshinImpactVT-v2.0-windows-x64.zip) | `19dd70f60a77b6004087ef331a7c369572a0bcaa10b63a111240c45de80bccbc` |
 | v2.0.1 | cloud only | [GitHub](https://github.com/xysslsy/GenshinImpactVT/releases/download/v2.0.1/GenshinImpactVT-v2.0.1-windows-x64.zip) | `1a866d5d1cfcb083890e57974bba52142233ac146f68730cb707fd9190e7c031` |
 | v2.0.2 | yes | [GitHub](https://github.com/xysslsy/GenshinImpactVT/releases/download/v2.0.2/GenshinImpactVT-v2.0.2-windows-x64.zip) | `b232c65a6ec2d7cdd425631736f648387aeee000ade58726057c7dad8f0371bd` |
+| v3.0 | yes | [GitHub](https://github.com/xysslsy/GenshinImpactVT/releases/download/v3.0/GenshinImpactVT-v3.0-windows-x64.zip) | `df67374e12e48923ea11d06f5f5da9f34435a4a4be879b808615a6a156c3ebae` |
 
-当前程序：`releases/v2.0.2/GenshinImpactVT/GenshinImpactVT.exe`。
+当前程序位于 `releases/v3.0/GenshinImpactVT/GenshinImpactVT.exe`。
 
-桌面仅保留 **GenshinImpactVT v2.0.2** 快捷方式。
+桌面入口为 **GenshinImpactVT v3.0**。
 
-当前版卸载入口：设置页的“卸载此版本”，或 `releases/v2.0.2/GenshinImpactVT/Uninstall.exe`。卸载清单和助手从 v1.2 起提供。
+可使用设置页的“卸载此版本”或 `releases/v3.0/GenshinImpactVT/Uninstall.exe` 卸载当前版本。卸载清单和助手从 v1.2 起提供。
